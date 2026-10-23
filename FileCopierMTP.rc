@@ -1,0 +1,104 @@
+// Resource script for FileCopierMTP
+#include "resource.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+#include "afxres.h"
+#undef APSTUDIO_READONLY_SYMBOLS
+
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  IDD_MAIN_DIALOG
+// ═════════════════════════════════════════════════════════════════════════════
+IDD_MAIN_DIALOG DIALOGEX 0, 0, 560, 290
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_VISIBLE |
+      WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX
+EXSTYLE WS_EX_APPWINDOW
+CAPTION "Universal File Copier"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    // ── Source ───────────────────────────────────────────────────────────────
+    LTEXT       "Source:", IDC_STATIC_SRC_LABEL,  8, 12, 36, 10
+    LTEXT       "",        IDC_STATIC_SRC_TYPE,   46, 12, 36, 10
+    EDITTEXT    IDC_EDIT_SRC_PATH, 84, 10, 368, 14,
+                ES_AUTOHSCROLL | ES_READONLY | WS_TABSTOP
+    PUSHBUTTON  "Browse...", IDC_BTN_BROWSE_SRC, 458, 9, 92, 16
+
+    // ── Destination ──────────────────────────────────────────────────────────
+    LTEXT       "Destination:", IDC_STATIC_DST_LABEL, 8, 32, 44, 10
+    LTEXT       "",             IDC_STATIC_DST_TYPE,  54, 32, 36, 10
+    EDITTEXT    IDC_EDIT_DST_PATH, 84, 30, 368, 14,
+                ES_AUTOHSCROLL | ES_READONLY | WS_TABSTOP
+    PUSHBUTTON  "Browse...", IDC_BTN_BROWSE_DST, 458, 29, 92, 16
+
+    // ── Action buttons ────────────────────────────────────────────────────────
+    PUSHBUTTON  "Start Copy", IDC_BTN_START,       410, 52, 72, 18
+    PUSHBUTTON  "Cancel",     IDC_BTN_CANCEL_COPY, 488, 52, 62, 18
+
+    // ── Progress ─────────────────────────────────────────────────────────────
+    LTEXT       "Progress:", IDC_STATIC, 8, 76, 38, 10
+    CONTROL     "", IDC_PROGRESS, "msctls_progress32", WS_BORDER,
+                50, 74, 502, 14
+
+    LTEXT       "", IDC_STATIC_STATUS, 8, 91, 544, 11
+    LTEXT       "", IDC_STATIC_FILE,   8, 104, 544, 11, SS_ENDELLIPSIS
+
+    // ── Log ──────────────────────────────────────────────────────────────────
+    LTEXT       "Log:", IDC_STATIC, 8, 120, 20, 10
+    LISTBOX     IDC_LIST_LOG, 8, 132, 544, 150,
+                LBS_NOSEL | LBS_NOINTEGRALHEIGHT |
+                WS_VSCROLL | WS_HSCROLL | WS_BORDER | WS_TABSTOP
+END
+
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  IDD_BROWSE_MTP_DIALOG
+// ═════════════════════════════════════════════════════════════════════════════
+IDD_BROWSE_MTP_DIALOG DIALOGEX 0, 0, 460, 300
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_VISIBLE |
+      WS_CAPTION | WS_SYSMENU | WS_SIZEBOX
+CAPTION "Select Files / Folders"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT       "Device / Drive:", IDC_STATIC, 8, 10, 56, 10
+    COMBOBOX    IDC_COMBO_DEVICE, 68, 8, 384, 80,
+                CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+
+    LTEXT       "Folders / Files (Ctrl+Click to select multiple):",
+                IDC_STATIC, 8, 26, 220, 10
+    CONTROL     "", IDC_TREE_MTP, "SysTreeView32",
+                TVS_HASLINES | TVS_HASBUTTONS | TVS_LINESATROOT |
+                TVS_SHOWSELALWAYS | WS_BORDER | WS_TABSTOP,
+                8, 38, 444, 204
+
+    LTEXT       "", IDC_STATIC_SEL_COUNT, 8, 248, 280, 11
+
+    LTEXT       "Selected path:", IDC_STATIC_SEL_PATH_LABEL, 8, 262, 56, 10, SS_NOTIFY
+    LTEXT       "", IDC_STATIC_SEL_PATH, 68, 262, 260, 10, SS_ENDELLIPSIS | SS_NOTIFY
+
+    PUSHBUTTON  "OK",     IDC_BTN_OK,     298, 278, 72, 18
+    PUSHBUTTON  "Cancel", IDC_BTN_CANCEL, 378, 278, 74, 18
+END
+
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  IDD_CONFLICT_DIALOG
+// ═════════════════════════════════════════════════════════════════════════════
+IDD_CONFLICT_DIALOG DIALOGEX 0, 0, 350, 148
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_VISIBLE |
+      WS_CAPTION | WS_SYSMENU
+CAPTION "File Conflict"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    ICON        IDI_WARNING, IDC_STATIC, 10, 14, 21, 20
+    LTEXT       "", IDC_STATIC_CONFLICT_MSG, 38, 8, 344, 88, SS_LEFT
+
+    AUTOCHECKBOX "Apply this action to all remaining conflicts",
+    IDC_CHK_APPLY_ALL, 38, 102, 240, 12
+
+    PUSHBUTTON  "Overwrite", IDC_BTN_OVERWRITE, 10, 120, 72, 18
+    PUSHBUTTON  "Skip", IDC_BTN_SKIP, 88, 120, 60, 18
+    PUSHBUTTON  "Overwrite if Newer", IDC_BTN_NEWER, 154, 120, 100, 18
+    PUSHBUTTON  "Cancel", IDC_BTN_CANCEL_OP, 260, 120, 72, 18
+END
