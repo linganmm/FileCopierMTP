@@ -19,6 +19,7 @@ devices in any direction).
 | **File → New Backup Plan…** (Ctrl+N) | Opens *New Backup Plan*: optional title, **Add Item…**, and per-item **Edit** / **Delete** buttons |
 | **File → Load Backup Plan…** (Ctrl+O) | Opens one or more `.lbp` files and lists them |
 | **File → Universal File Copier…** | The original one-off copy dialog, unchanged |
+| **Help → About LXFreeBack…** | Program name, version, description and copyright (Luoxuan Intelligent Technology Co., Ltd) |
 | Row buttons / **Tool** menu | **Edit**, **Unload**, **Remove**, **Run** (becomes **Stop** while running), **Status** — the Tool menu acts on the selected plan |
 
 **Saving** (*New/Edit Backup Plan* dialog)

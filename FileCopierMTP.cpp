@@ -4,8 +4,32 @@
 #include "LXFreeBackDoc.h"
 #include "LXFreeBackView.h"
 
+// ── About box ────────────────────────────────────────────────────────────────
+
+class CAboutDlg : public CDialogEx
+{
+public:
+    CAboutDlg() : CDialogEx(IDD_ABOUTBOX) {}
+
+protected:
+    virtual BOOL OnInitDialog()
+    {
+        CDialogEx::OnInitDialog();
+        SetDlgItemText(IDC_STATIC_ABOUT_COPYRIGHT,
+            _T("Copyright \u00a9 2026 Luoxuan Intelligent Technology Co., Ltd"));
+        return TRUE;
+    }
+};
+
 BEGIN_MESSAGE_MAP(CFileCopierMTPApp, CWinApp)
+    ON_COMMAND(ID_APP_ABOUT, &CFileCopierMTPApp::OnAppAbout)
 END_MESSAGE_MAP()
+
+void CFileCopierMTPApp::OnAppAbout()
+{
+    CAboutDlg dlg;
+    dlg.DoModal();
+}
 
 CFileCopierMTPApp theApp;
 

@@ -65,6 +65,7 @@
 #define IDD_PLAN_DIALOG             105   // "New Backup Plan" / "Edit Backup Plan"
 #define IDD_ITEM_DIALOG             106   // "Add Item" / "Edit Item"
 #define IDD_PLAN_STATUS_DIALOG      107   // "Status" log viewer
+#define IDD_ABOUTBOX                108   // Help > About
 
 // ── Plan dialog controls ─────────────────────────────────────────────────────
 #define IDC_EDIT_PLAN_TITLE         4001
@@ -96,6 +97,10 @@
 #define IDC_STATIC_STATUS_TITLE     4101
 #define IDC_STATIC_STATUS_FILE      4102
 //    IDC_PROGRESS, IDC_STATIC_STATUS, IDC_STATIC_FILE, IDC_LIST_LOG re-used
+
+// ── About box ────────────────────────────────────────────────────────────────
+#define IDC_STATIC_ABOUT_VERSION    4401
+#define IDC_STATIC_ABOUT_COPYRIGHT  4402
 
 // ── Main view ────────────────────────────────────────────────────────────────
 #define IDC_PLAN_LIST               4201
