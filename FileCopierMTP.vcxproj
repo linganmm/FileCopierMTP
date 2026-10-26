@@ -74,7 +74,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <AdditionalDependencies>
-        PortableDeviceGuids.lib;shlwapi.lib;ole32.lib;oleaut32.lib;%(AdditionalDependencies)
+        PortableDeviceGuids.lib;shlwapi.lib;ole32.lib;oleaut32.lib;comctl32.lib;%(AdditionalDependencies)
       </AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
@@ -108,6 +108,19 @@
     <ClCompile Include="MtpBrowserDlg.cpp" />
     <ClCompile Include="ConflictDialog.cpp" />
     <ClCompile Include="WpdHelper.cpp" />
+    <ClCompile Include="CopyEngine.cpp" />
+    <ClCompile Include="BackupPlan.cpp" />
+    <ClCompile Include="ActionList.cpp" />
+    <ClCompile Include="ItemDlg.cpp" />
+    <ClCompile Include="PlanDlg.cpp" />
+    <ClCompile Include="PlanStatusDlg.cpp" />
+    <ClCompile Include="MainFrm.cpp" />
+    <ClCompile Include="LXFreeBackDoc.cpp" />
+    <ClCompile Include="LXFreeBackView.cpp" />
+    <!-- JsonLite.cpp is plain C++ with no MFC dependency — no PCH -->
+    <ClCompile Include="JsonLite.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
     <!-- WpdGuids.cpp defines INITGUID before WPD headers — must NOT use PCH -->
     <ClCompile Include="WpdGuids.cpp">
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
@@ -122,9 +135,23 @@
     <ClInclude Include="MtpBrowserDlg.h" />
     <ClInclude Include="ConflictDialog.h" />
     <ClInclude Include="WpdHelper.h" />
+    <ClInclude Include="CopyEngine.h" />
+    <ClInclude Include="JsonLite.h" />
+    <ClInclude Include="BackupPlan.h" />
+    <ClInclude Include="PlanEntry.h" />
+    <ClInclude Include="ActionList.h" />
+    <ClInclude Include="ItemDlg.h" />
+    <ClInclude Include="PlanDlg.h" />
+    <ClInclude Include="PlanStatusDlg.h" />
+    <ClInclude Include="MainFrm.h" />
+    <ClInclude Include="LXFreeBackDoc.h" />
+    <ClInclude Include="LXFreeBackView.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="FileCopierMTP.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="res\LXFreeBack.ico" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
 </Project>

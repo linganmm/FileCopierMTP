@@ -6,6 +6,95 @@ preserving the complete sub-folder hierarchy in both directions.
 
 ---
 
+## LXFreeBack — backup plans (startup window)
+
+The program now starts with an SDI window named **LXFreeBack** that manages
+*backup plans*. A plan is a named list of items; each item is one
+"source files/folders → destination folder" pair, chosen with the same
+device/folder browser as the Universal File Copier (local drives and MTP
+devices in any direction).
+
+| Where | What it does |
+|---|---|
+| **File → New Backup Plan…** (Ctrl+N) | Opens *New Backup Plan*: optional title, **Add Item…**, and per-item **Edit** / **Delete** buttons |
+| **File → Load Backup Plan…** (Ctrl+O) | Opens one or more `.lbp` files and lists them |
+| **File → Universal File Copier…** | The original one-off copy dialog, unchanged |
+| Row buttons / **Tool** menu | **Edit**, **Unload**, **Remove**, **Run** (becomes **Stop** while running), **Status** — the Tool menu acts on the selected plan |
+
+**Saving** (*New/Edit Backup Plan* dialog)
+
+* **Save** writes `<title>.lbp` to the plan's current folder: the folder of
+  the executable for a new plan, the plan file's own folder for a loaded one.
+* **Save As…** asks for a folder, saves there, and makes it the current folder.
+* **Save & Close** saves to the current folder and closes; **Cancel** closes
+  without saving.
+* A blank title becomes `LXBackupplanN`, with the smallest N that gives a file
+  name not already used in the executable's folder.
+* Changing the title of a saved plan renames its file.
+* A plan appears in the main list once it has been saved.
+
+**Exclusions** (*Add/Edit Item* dialog). The optional **Exclusion:** row picks
+files and folders *inside* the source that must not be copied, using the same
+Ctrl+Click browser as **Source** (it opens on the source's device with the
+source tree already expanded). An excluded folder is skipped together with
+everything under it, and is not even scanned. Example: source `A\` with
+sub-folders `a1\`, `a2\`, `a3\` and exclusion `A\a3` copies `A\a1` and
+`A\a2` only. Exclusions must be on the same device as the source; anything
+outside the selected source folders is removed with a notice. **Clear**
+removes all exclusions. Older `.lbp` files without exclusions still load.
+
+**Running.** A row shows a progress bar while its plan runs; several plans
+can run at the same time. **Status** shows the progress and the log, using
+the same messages as the Universal File Copier log box. Missing local
+destination folders are created. Before copying, MTP items are looked up
+again by device name and folder path, because Android renumbers object IDs
+on every connection.
+
+**Remove** asks for confirmation, then deletes the `.lbp` file and removes the
+plan from the list. **Unload** only removes it from the list.
+
+### `.lbp` file format (UTF-8 JSON)
+
+```json
+{
+  "format": "LXFreeBack Backup Plan",
+  "version": 1,
+  "name": "LXBackupplan1",
+  "created": "2026-10-26T17:05:03+08:00",
+  "modified": "2026-10-26T17:20:41+08:00",
+  "items": [
+    {
+      "source": {
+        "type": "mtp",
+        "deviceId": "\\\\?\\usb#vid_18d1&pid_4ee1#...",
+        "deviceName": "Pixel 8",
+        "displayPath": "Pixel 8 / Internal shared storage/DCIM/Camera",
+        "entries": [
+          { "name": "Camera", "isFolder": true,
+            "mtpPath": "Internal shared storage/DCIM/Camera", "objectId": "o2A1" }
+        ],
+        "exclusions": [
+          { "name": "Thumbnails", "isFolder": true,
+            "mtpPath": "Internal shared storage/DCIM/Camera/Thumbnails", "objectId": "o2B7" }
+        ]
+      },
+      "destination": {
+        "type": "local",
+        "deviceId": "D:\\",
+        "deviceName": "Data (D:)",
+        "displayPath": "D:\\Backup\\Phone",
+        "path": "D:\\Backup\\Phone"
+      }
+    }
+  ]
+}
+```
+
+Local source entries and exclusions carry `"path"` instead of
+`"mtpPath"`/`"objectId"`.
+
+---
+
 ## Feature Summary
 
 | Feature | Detail |
@@ -28,13 +117,25 @@ preserving the complete sub-folder hierarchy in both directions.
 ```
 FileCopierMTP/
 ├── pch.h / pch.cpp            Precompiled header
-├── resource.h                  All control IDs & WM_ messages
-├── FileCopierMTP.h/.cpp        CWinApp entry point
-├── MainDlg.h/.cpp              Main dialog + copy worker thread
+├── resource.h                  All control / command IDs & WM_ messages
+├── FileCopierMTP.h/.cpp        CWinApp entry point (starts the LXFreeBack SDI window)
+├── MainFrm.h/.cpp              LXFreeBack frame window (menu, status bar)
+├── LXFreeBackDoc.h/.cpp        Document: the list of loaded plans
+├── LXFreeBackView.h/.cpp       View: plan rows, Tool menu, runs plans
+├── PlanDlg.h/.cpp              "New / Edit Backup Plan" dialog
+├── ItemDlg.h/.cpp              "Add / Edit Item" dialog
+├── PlanStatusDlg.h/.cpp        "Status" (progress + log) dialog
+├── ActionList.h/.cpp           Scrolling row list with per-row buttons + progress bar
+├── PlanEntry.h                 A loaded plan + its run state and log
+├── BackupPlan.h/.cpp           Plan model, .lbp save/load, default titles
+├── JsonLite.h/.cpp             Small JSON reader/writer (no MFC, no PCH)
+├── CopyEngine.h/.cpp           CCopyJob: worker-thread copy engine (per job state)
+├── MainDlg.h/.cpp              Universal File Copier dialog (uses CCopyJob)
 ├── MtpBrowserDlg.h/.cpp        MTP device & folder tree browser
 ├── ConflictDialog.h/.cpp       File-conflict prompt
 ├── WpdHelper.h/.cpp            WPD/MTP COM abstraction layer
-├── FileCopierMTP.rc            Dialog resource layouts
+├── res/LXFreeBack.ico          Application icon
+├── FileCopierMTP.rc            Dialogs, menu, accelerators, strings
 └── FileCopierMTP.vcxproj       Visual Studio 2022 project
 ```
 
@@ -45,10 +146,10 @@ FileCopierMTP/
 ### Thread model
 
 ```
-UI Thread                              Worker Thread (ThreadProc)
+UI Thread                              Worker Thread (CCopyJob::ThreadProc)
 ─────────────────────────────          ──────────────────────────────────────
 DoModal()
-  OnBtnStart()  ──AfxBeginThread──►   CoInitializeEx(COINIT_MULTITHREADED)
+  CCopyJob::Start ──AfxBeginThread──►   CoInitializeEx(COINIT_MULTITHREADED)
                                        CWpdHelper::OpenDevice()
   OnCopyProgress() ◄──PostMessage──   for each file:
     update progress bar                  PostMessage(WM_COPY_PROGRESS)

@@ -1,4 +1,4 @@
-#include "pch.h"
+﻿#include "pch.h"
 #include "MtpBrowserDlg.h"
 #include <filesystem>
 namespace fs = std::filesystem;
@@ -75,6 +75,9 @@ BOOL CMtpBrowserDlg::OnInitDialog()
         SetWindowText(_T("Select Destination Folder"));
         AdjustDestDialog();
     }
+
+    if (!m_strCaption.IsEmpty())
+        SetWindowText(m_strCaption);
 
     m_btnOk.EnableWindow(FALSE);
 

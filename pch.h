@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 
 // MFC
 #include <afxwin.h>
@@ -6,6 +6,7 @@
 #include <afxdlgs.h>
 #include <afxcmn.h>
 #include <afxmt.h>
+#include <afxdialogex.h>
 
 // Windows / COM / Shell
 #include <windows.h>
@@ -60,3 +61,16 @@ extern const GUID WPD_OBJECT_FORMAT_TEXT_GUID;
 #pragma comment(lib, "shlwapi.lib")
 #pragma comment(lib, "ole32.lib")
 #pragma comment(lib, "oleaut32.lib")
+#pragma comment(lib, "comctl32.lib")
+
+// Visual styles (Common Controls 6) — modern buttons, progress bars and the
+// Vista-style folder picker used by "Save As".
+#if defined _M_IX86
+#pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='x86' publicKeyToken='6595b64144ccf1df' language='*'\"")
+#elif defined _M_X64
+#pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='amd64' publicKeyToken='6595b64144ccf1df' language='*'\"")
+#elif defined _M_ARM64
+#pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='arm64' publicKeyToken='6595b64144ccf1df' language='*'\"")
+#else
+#pragma comment(linker,"/manifestdependency:\"type='win32' name='Microsoft.Windows.Common-Controls' version='6.0.0.0' processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
+#endif

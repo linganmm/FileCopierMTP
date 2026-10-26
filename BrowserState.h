@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "pch.h"
 #include "WpdHelper.h"   // for MtpDeviceInfo
 
@@ -21,6 +21,13 @@ struct CSourceItem
 
     // Local
     CString strLocalPath;     // absolute path, e.g. "C:\\foo\\bar" or "C:\\foo\\bar\\file.txt"
+
+    // MTP only: full name path from the device root, e.g.
+    // "Internal shared storage/DCIM/Camera".  Filled when an item is stored in
+    // a backup plan, because WPD object IDs are not stable between sessions
+    // (Android re-numbers them on every connection).  The plan runner resolves
+    // this path back to a fresh object ID before copying.
+    CString strMtpPath;
 };
 
 // ── TreeNodeSnapshot ──────────────────────────────────────────────────────────

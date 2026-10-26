@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "pch.h"
 
 // Forward declaration of the ToWide helper defined in WpdHelper.cpp
@@ -137,10 +137,13 @@ public:
     CString CreateFolder(const CString& strParentObjectId, const CString& strName);
 
     // Recursively enumerate all file nodes under a folder (depth-first)
-    // Each callback receives the MtpNode and its relative path from strRootId
+    // Each callback receives the MtpNode and its relative path from strRootId.
+    // skip (optional): return true for a node (file or folder) that must be
+    // left out — a skipped folder is not descended into.
     void EnumerateFiles(const CString& strRootObjectId,
                         const CString& strRelPrefix,
-                        std::function<void(const MtpNode&, const CString&)> callback);
+                        std::function<void(const MtpNode&, const CString&)> callback,
+                        std::function<bool(const MtpNode&)> skip = nullptr);
 
     // Delete an object on the device
     bool DeleteObject(const CString& strObjectId);

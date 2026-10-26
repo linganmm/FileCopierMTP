@@ -62,6 +62,8 @@ BOOL CConflictDialog::OnInitDialog()
         (LPCTSTR)dstTime);
 
     m_staticMsg.SetWindowText(msg);
+    if (!m_info.strCaption.IsEmpty())
+        SetWindowText(m_info.strCaption);
     return TRUE;
 }
 
