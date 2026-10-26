@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "pch.h"
 #include "WpdHelper.h"   // for MtpDeviceInfo
 
@@ -21,6 +21,14 @@ struct CSourceItem
 
     // Local
     CString strLocalPath;     // absolute path, e.g. "C:\\foo\\bar" or "C:\\foo\\bar\\file.txt"
+
+    // Path below the device / drive root, as stored in backup plans:
+    //   MTP:   "Internal shared storage/DCIM/Camera"  ('/' separators)
+    //   Local: "Users\Me\Pictures"                  (drive root "D:\" excluded)
+    // Plans keep only the device name + this sub path; the plan runner finds
+    // the device by name and rebuilds the real path / fresh object ID (WPD
+    // object IDs and PnP device IDs change between connections).
+    CString strSubPath;
 };
 
 // ── TreeNodeSnapshot ──────────────────────────────────────────────────────────

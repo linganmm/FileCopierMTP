@@ -13,6 +13,7 @@ struct CConflictInfo
     CString  strRelPath;
     FILETIME ftSrc = {};   // modification time of the source file
     FILETIME ftDst = {};   // modification time of the destination file
+    CString  strCaption;   // optional window caption (e.g. names the backup plan)
 };
 
 class CConflictDialog : public CDialogEx

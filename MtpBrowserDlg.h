@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include "pch.h"
 #include "resource.h"
 #include "WpdHelper.h"
@@ -19,6 +19,7 @@ public:
     // Set before DoModal()
     bool           m_bSourceMode = false;
     CBrowserState* m_pState      = nullptr;
+    CString        m_strCaption;            // optional window title override
 
     // Results
     bool    m_bIsLocalDisk = false;

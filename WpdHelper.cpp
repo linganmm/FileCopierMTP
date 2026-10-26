@@ -1,4 +1,4 @@
-#include "pch.h"
+﻿#include "pch.h"
 #include "WpdHelper.h"
 #include <strsafe.h>
 
@@ -845,16 +845,18 @@ CString CWpdHelper::CreateFolder(const CString& strParentObjectId, const CString
 
 void CWpdHelper::EnumerateFiles(const CString& strRootObjectId,
                                  const CString& strRelPrefix,
-                                 std::function<void(const MtpNode&, const CString&)> cb)
+                                 std::function<void(const MtpNode&, const CString&)> cb,
+                                 std::function<bool(const MtpNode&)> skip)
 {
     auto children = GetChildren(strRootObjectId);
     for (auto& node : children)
     {
+        if (skip && skip(node)) continue;
         CString rel = strRelPrefix.IsEmpty()
                       ? node.strName
                       : strRelPrefix + _T("\\") + node.strName;
         if (node.bIsFolder)
-            EnumerateFiles(node.strObjectId, rel, cb);
+            EnumerateFiles(node.strObjectId, rel, cb, skip);
         else
             cb(node, rel);
     }

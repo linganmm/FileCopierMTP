@@ -102,3 +102,217 @@ BEGIN
     PUSHBUTTON  "Overwrite if Newer", IDC_BTN_NEWER, 154, 120, 100, 18
     PUSHBUTTON  "Cancel", IDC_BTN_CANCEL_OP, 260, 120, 72, 18
 END
+
+
+// =============================================================================
+//  LXFreeBack - SDI main window resources
+// =============================================================================
+
+IDR_MAINFRAME ICON "res\\LXFreeBack.ico"
+
+IDR_MAINFRAME MENU
+BEGIN
+    POPUP "&File"
+    BEGIN
+        MENUITEM "&New Backup Plan...\tCtrl+N",  ID_FILE_NEW_PLAN
+        MENUITEM "&Load Backup Plan...\tCtrl+O", ID_FILE_LOAD_PLAN
+        MENUITEM SEPARATOR
+        MENUITEM "&Universal File Copier...",    ID_FILE_QUICK_COPY
+        MENUITEM SEPARATOR
+        MENUITEM "E&xit",                        ID_APP_EXIT
+    END
+    POPUP "&Tool"
+    BEGIN
+        MENUITEM "&Edit",                        ID_TOOL_EDIT_PLAN
+        MENUITEM "&Unload",                      ID_TOOL_UNLOAD_PLAN
+        MENUITEM "Re&move",                      ID_TOOL_REMOVE_PLAN
+        MENUITEM "&Run",                         ID_TOOL_RUN_PLAN
+        MENUITEM "&Status",                      ID_TOOL_STATUS_PLAN
+    END
+    POPUP "&Help"
+    BEGIN
+        MENUITEM "&About LXFreeBack...",         ID_APP_ABOUT
+    END
+END
+
+IDR_MAINFRAME ACCELERATORS
+BEGIN
+    "N", ID_FILE_NEW_PLAN,  VIRTKEY, CONTROL, NOINVERT
+    "O", ID_FILE_LOAD_PLAN, VIRTKEY, CONTROL, NOINVERT
+END
+
+STRINGTABLE
+BEGIN
+    IDR_MAINFRAME           "LXFreeBack\n\nLXFreeBack\n\n\nLXFreeBack.Document\nLXFreeBack Document"
+    AFX_IDS_APP_TITLE       "LXFreeBack"
+    AFX_IDS_IDLEMESSAGE     "Ready"
+END
+
+STRINGTABLE
+BEGIN
+    ID_FILE_NEW_PLAN        "Create a new backup plan\nNew Backup Plan"
+    ID_FILE_LOAD_PLAN       "Load a backup plan (.lbp) into the list\nLoad Backup Plan"
+    ID_FILE_QUICK_COPY      "Open the Universal File Copier for a one-off copy\nUniversal File Copier"
+    ID_APP_EXIT             "Quit LXFreeBack\nExit"
+    ID_APP_ABOUT            "Show program information, version and copyright\nAbout"
+END
+
+STRINGTABLE
+BEGIN
+    ID_TOOL_EDIT_PLAN       "Edit the selected backup plan\nEdit"
+    ID_TOOL_UNLOAD_PLAN     "Remove the selected plan from the list (its file is kept)\nUnload"
+    ID_TOOL_REMOVE_PLAN     "Delete the selected plan from the list and from disk\nRemove"
+    ID_TOOL_RUN_PLAN        "Run the selected backup plan, or stop it while it runs\nRun"
+    ID_TOOL_STATUS_PLAN     "Show the progress and log of the selected plan\nStatus"
+END
+
+
+// =============================================================================
+//  IDD_PLAN_DIALOG  ("New Backup Plan" / "Edit Backup Plan")
+// =============================================================================
+IDD_PLAN_DIALOG DIALOGEX 0, 0, 440, 272
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_VISIBLE |
+      WS_CAPTION | WS_SYSMENU
+CAPTION "New Backup Plan"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT       "Plan &title:", IDC_STATIC, 8, 11, 44, 10
+    EDITTEXT    IDC_EDIT_PLAN_TITLE, 56, 9, 376, 14, ES_AUTOHSCROLL | WS_TABSTOP
+    LTEXT       "", IDC_STATIC_TITLE_HINT, 56, 26, 376, 10
+
+    LTEXT       "Backup items:", IDC_STATIC_ITEMS_LABEL, 8, 48, 120, 10
+    PUSHBUTTON  "&Add Item...", IDC_BTN_ADD_ITEM, 362, 44, 70, 16
+
+    // Placeholder - the item list (CActionList) is created over this rectangle
+    CONTROL     "", IDC_ITEM_LIST_FRAME, "Static", SS_BLACKFRAME | NOT WS_VISIBLE,
+                8, 64, 424, 150
+
+    LTEXT       "", IDC_STATIC_PLAN_FILE,  8, 220, 424, 10, SS_PATHELLIPSIS
+    LTEXT       "", IDC_STATIC_PLAN_TIMES, 8, 232, 424, 10
+
+    PUSHBUTTON    "&Save",            IDC_BTN_SAVE,       142, 250, 66, 16
+    PUSHBUTTON    "Save &As...",      IDC_BTN_SAVE_AS,    214, 250, 66, 16
+    DEFPUSHBUTTON "Save && &Close",   IDC_BTN_SAVE_CLOSE, 286, 250, 74, 16
+    PUSHBUTTON    "Cancel",           IDCANCEL,           366, 250, 66, 16
+END
+
+
+// =============================================================================
+//  IDD_ITEM_DIALOG  ("Add Item" / "Edit Item")
+// =============================================================================
+IDD_ITEM_DIALOG DIALOGEX 0, 0, 460, 126
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_VISIBLE |
+      WS_CAPTION | WS_SYSMENU
+CAPTION "Add Item"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT       "Source:", IDC_STATIC_SRC_LABEL,  8, 12, 36, 10
+    LTEXT       "",        IDC_STATIC_SRC_TYPE,   46, 12, 36, 10
+    EDITTEXT    IDC_EDIT_SRC_PATH, 84, 10, 300, 14,
+                ES_AUTOHSCROLL | ES_READONLY | WS_TABSTOP
+    PUSHBUTTON  "Browse...", IDC_BTN_BROWSE_SRC, 390, 9, 62, 16
+
+    // Files / folders inside the source that are NOT copied (optional)
+    LTEXT       "Exclusion:", IDC_STATIC_EXCL_LABEL, 8, 32, 40, 10
+    LTEXT       "",           IDC_STATIC_EXCL_TYPE,  50, 32, 32, 10
+    EDITTEXT    IDC_EDIT_EXCL_PATH, 84, 30, 234, 14,
+                ES_AUTOHSCROLL | ES_READONLY | WS_TABSTOP
+    PUSHBUTTON  "Clear",     IDC_BTN_CLEAR_EXCL,  322, 29, 62, 16
+    PUSHBUTTON  "Browse...", IDC_BTN_BROWSE_EXCL, 390, 29, 62, 16
+
+    LTEXT       "Destination:", IDC_STATIC_DST_LABEL, 8, 52, 44, 10
+    LTEXT       "",             IDC_STATIC_DST_TYPE,  54, 52, 30, 10
+    EDITTEXT    IDC_EDIT_DST_PATH, 84, 50, 300, 14,
+                ES_AUTOHSCROLL | ES_READONLY | WS_TABSTOP
+    PUSHBUTTON  "Browse...", IDC_BTN_BROWSE_DST, 390, 49, 62, 16
+
+    // Strategy when a file already exists at the destination
+    LTEXT       "If file exists:", IDC_STATIC_CONFLICT_LABEL, 8, 72, 56, 10
+    COMBOBOX    IDC_COMBO_CONFLICT, 84, 70, 140, 60,
+                CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+
+    DEFPUSHBUTTON "OK",     IDOK,     316, 102, 66, 16
+    PUSHBUTTON    "Cancel", IDCANCEL, 386, 102, 66, 16
+END
+
+
+// =============================================================================
+//  IDD_PLAN_STATUS_DIALOG  ("Status")
+// =============================================================================
+IDD_PLAN_STATUS_DIALOG DIALOGEX 0, 0, 460, 262
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_VISIBLE |
+      WS_CAPTION | WS_SYSMENU
+CAPTION "Status"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    LTEXT       "", IDC_STATIC_STATUS_TITLE, 8, 8, 444, 10, SS_PATHELLIPSIS
+
+    LTEXT       "Progress:", IDC_STATIC, 8, 26, 38, 10
+    CONTROL     "", IDC_PROGRESS, "msctls_progress32", WS_BORDER,
+                50, 24, 402, 14
+
+    LTEXT       "", IDC_STATIC_STATUS, 8, 42, 444, 10, SS_ENDELLIPSIS
+    LTEXT       "", IDC_STATIC_FILE,   8, 54, 444, 10, SS_ENDELLIPSIS
+
+    LTEXT       "Log:", IDC_STATIC, 8, 70, 20, 10
+    LISTBOX     IDC_LIST_LOG, 8, 82, 444, 150,
+                LBS_NOSEL | LBS_NOINTEGRALHEIGHT |
+                WS_VSCROLL | WS_HSCROLL | WS_BORDER | WS_TABSTOP
+
+    PUSHBUTTON    "Stop",  IDC_BTN_CANCEL_COPY, 316, 240, 66, 16
+    DEFPUSHBUTTON "Close", IDCANCEL,            386, 240, 66, 16
+END
+
+
+// =============================================================================
+//  IDD_ABOUTBOX  (Help > About LXFreeBack)
+//  The copyright line is set in CAboutDlg::OnInitDialog so the (c) sign is
+//  exact regardless of the resource code page.
+// =============================================================================
+IDD_ABOUTBOX DIALOGEX 0, 0, 280, 148
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_VISIBLE |
+      WS_CAPTION | WS_SYSMENU
+CAPTION "About LXFreeBack"
+FONT 9, "Segoe UI", 400, 0, 0x1
+BEGIN
+    ICON        IDR_MAINFRAME, IDC_STATIC, 12, 12, 21, 20
+    LTEXT       "LXFreeBack", IDC_STATIC, 44, 12, 224, 10
+    LTEXT       "Version 1.0", IDC_STATIC_ABOUT_VERSION, 44, 24, 224, 10
+    LTEXT       "Backup plans for files and folders on local drives and Android / MTP devices: plan items with exclusions, a per-item strategy for existing files, progress and logs. Includes the Universal File Copier for one-off copies.",
+                IDC_STATIC, 44, 42, 224, 42
+    LTEXT       "", IDC_STATIC_ABOUT_COPYRIGHT, 44, 90, 224, 10
+    LTEXT       "Licensed under the Apache License, Version 2.0.",
+                IDC_STATIC, 44, 102, 224, 10
+    DEFPUSHBUTTON "OK", IDOK, 206, 126, 62, 16
+END
+
+
+// =============================================================================
+//  Version information (shown in the .exe's Properties > Details)
+// =============================================================================
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION 1,0,0,0
+ PRODUCTVERSION 1,0,0,0
+ FILEFLAGSMASK 0x3fL
+ FILEFLAGS 0x0L
+ FILEOS 0x40004L
+ FILETYPE 0x1L
+ FILESUBTYPE 0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"
+        BEGIN
+            VALUE "CompanyName",      "Luoxuan Intelligent Technology Co., Ltd"
+            VALUE "FileDescription",  "LXFreeBack - backup plans and file copier"
+            VALUE "FileVersion",      "1.0.0.0"
+            VALUE "LegalCopyright",   "Copyright (C) 2026 Luoxuan Intelligent Technology Co., Ltd"
+            VALUE "ProductName",      "LXFreeBack"
+            VALUE "ProductVersion",   "1.0.0.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
