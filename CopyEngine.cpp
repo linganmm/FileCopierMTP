@@ -5,6 +5,17 @@ namespace fs = std::filesystem;
 
 std::atomic<UINT> CCopyJob::s_nextId{ 1 };
 
+CString ConflictPolicyName(int nPolicy)
+{
+    switch (nPolicy)
+    {
+    case CONFLICT_OVERWRITE: return _T("Overwrite");
+    case CONFLICT_SKIP:      return _T("Skip");
+    case CONFLICT_NEWER:     return _T("Overwrite if newer");
+    default:                 return _T("Ask");
+    }
+}
+
 CCopyJob::CCopyJob(HWND hNotify, std::vector<CCopyTask> tasks, bool bResolveSaved)
     : m_nId(s_nextId++)
     , m_hNotify(hNotify)
@@ -90,6 +101,11 @@ void CCopyJob::PostLog(const CString& msg)   { Post(WM_COPY_LOG,   new CString(m
 
 int CCopyJob::ResolveConflict(const CString& relPath, FILETIME ftSrc, FILETIME ftDst)
 {
+    // A fixed strategy chosen for this item → no prompt
+    if (m_nTaskPolicy == CONFLICT_OVERWRITE || m_nTaskPolicy == CONFLICT_SKIP ||
+        m_nTaskPolicy == CONFLICT_NEWER)
+        return m_nTaskPolicy;
+
     if (m_stats.bHaveGlobal) return m_stats.nGlobal;
 
     {
@@ -316,11 +332,12 @@ void CCopyJob::Run()
         if (IsCancelled()) break;
         m_nTask = i + 1;
         CCopyTask t = m_tasks[i];
+        m_nTaskPolicy = t.nOnConflict;
 
         if (nTasks > 1 || m_bResolveSaved)
         {
             CString s;
-            s.Format(_T("Item %d/%d: %s  →  %s"), i + 1, nTasks,
+            s.Format(_T("Item %d/%d: %s  \u2192  %s"), i + 1, nTasks,
                      (LPCTSTR)t.src.strDisplayPath, (LPCTSTR)t.dst.strDisplayPath);
             PostLog(s);
         }
@@ -330,6 +347,8 @@ void CCopyJob::Run()
             s.Format(_T("  Excluding %d file(s)/folder(s)"), (int)t.src.excludes.size());
             PostLog(s);
         }
+        if (t.nOnConflict != 0)
+            PostLog(_T("  If file exists: ") + ConflictPolicyName(t.nOnConflict));
 
         InitStat(0);
         ReportProgress(_T(""));

@@ -76,8 +76,8 @@ int CLXFreeBackView::OnCreate(LPCREATESTRUCT lpCreateStruct)
 
     m_list.SetButtonLabels({ _T("Edit"), _T("Unload"), _T("Remove"), _T("Run"), _T("Status") });
     m_list.SetEmptyText(_T("No backup plans loaded.\n\n")
-                        _T("Use File → New Backup Plan to create one, or\n")
-                        _T("File → Load Backup Plan to open an existing .lbp file."));
+                        _T("Use File \u2192 New Backup Plan to create one, or\n")
+                        _T("File \u2192 Load Backup Plan to open an existing .lbp file."));
     if (!m_list.Create(CRect(0, 0, 0, 0), this, IDC_PLAN_LIST))
         return -1;
     return 0;
@@ -142,7 +142,7 @@ void CLXFreeBackView::RefreshRow(int index)
     if (!e.strLastRun.IsEmpty())
         sub = e.strLastRun + _T("     ") + e.plan.strFilePath;
     else
-        sub.Format(_T("%d item%s  ·  %s"), n, n == 1 ? _T("") : _T("s"),
+        sub.Format(_T("%d item%s  \u00b7  %s"), n, n == 1 ? _T("") : _T("s"),
                    (LPCTSTR)e.plan.strFilePath);
     m_list.SetRowText(index, e.plan.strTitle, sub);
 
@@ -316,7 +316,7 @@ void CLXFreeBackView::RunPlan(int index)
     if (e->bRunning)                       // the Run button reads "Stop"
     {
         if (e->job) e->job->Cancel();
-        e->strStatus = _T("Stopping…");
+        e->strStatus = _T("Stopping\u2026");
         RefreshRow(index);
         return;
     }
@@ -331,7 +331,7 @@ void CLXFreeBackView::RunPlan(int index)
     e->log.clear();
     ++e->nRunSerial;
     e->nPercent = 0;
-    e->strStatus = _T("Starting…");
+    e->strStatus = _T("Starting\u2026");
     e->strCurrentFile.Empty();
     e->log.push_back(_T("Run started ") + DateTimeNow());
 
@@ -423,10 +423,10 @@ LRESULT CLXFreeBackView::OnCopyProgress(WPARAM wParam, LPARAM lParam)
 
     e.nPercent = info->OverallPercent();
     if (info->nTotal > 0)
-        e.strStatus.Format(_T("Item %d/%d  ·  copying %d of %d"),
+        e.strStatus.Format(_T("Item %d/%d  \u00b7  copying %d of %d"),
                            info->nTask, info->nTaskCount, info->nCurrent, info->nTotal);
     else
-        e.strStatus.Format(_T("Item %d/%d  ·  preparing…"),
+        e.strStatus.Format(_T("Item %d/%d  \u00b7  preparing\u2026"),
                            info->nTask, info->nTaskCount);
     e.strCurrentFile = info->strCurrentFile;
 

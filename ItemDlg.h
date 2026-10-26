@@ -47,6 +47,7 @@ private:
     CStatic m_staticDstType;
     CEdit   m_editExcl;
     CStatic m_staticExclType;
+    CComboBox m_comboConflict;
 
     void UpdateUi();
     static CString DeviceName(const CBrowserState* pState, const CString& deviceId);

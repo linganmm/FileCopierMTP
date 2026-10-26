@@ -57,11 +57,18 @@ struct CEndpoint
     }
 };
 
+// "Overwrite" / "Skip" / "Overwrite if newer" (or "Ask" for 0)
+CString ConflictPolicyName(int nPolicy);
+
 // One unit of work: copy every item of src into the dst folder.
 struct CCopyTask
 {
     CEndpoint src;
     CEndpoint dst;
+    // What to do when a file already exists at the destination:
+    // 0 = ask with the conflict dialog (Universal File Copier), or
+    // CONFLICT_OVERWRITE / CONFLICT_SKIP / CONFLICT_NEWER (backup plans).
+    int nOnConflict = 0;
 };
 
 // ── Progress payload ──────────────────────────────────────────────────────────
@@ -184,6 +191,7 @@ private:
     std::atomic<bool>      m_bRunning{ false };
 
     int  m_nTask = 0;          // 1-based index of the running task
+    int  m_nTaskPolicy = 0;    // nOnConflict of the running task
     Stat m_stats;              // per task
     int  m_nAllCopied = 0, m_nAllSkipped = 0, m_nAllErrors = 0, m_nAllTotal = 0;
 

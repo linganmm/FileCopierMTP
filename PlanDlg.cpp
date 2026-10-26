@@ -75,7 +75,9 @@ CString CPlanDlg::RowTitle(int index) const
 
 CString CPlanDlg::RowSubtitle(int index) const
 {
-    return _T("→  ") + PlanFile::DescribeEndpoint(m_plan.items[index].dst);
+    const CPlanItem& it = m_plan.items[index];
+    return _T("\u2192  ") + PlanFile::DescribeEndpoint(it.dst) +
+           _T("     [if file exists: ") + ConflictPolicyName(it.nOnConflict) + _T("]");
 }
 
 void CPlanDlg::RefreshRows(int fromIndex)

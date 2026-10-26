@@ -43,6 +43,13 @@ sub-folders `a1\`, `a2\`, `a3\` and exclusion `A\a3` copies `A\a1` and
 outside the selected source folders is removed with a notice. **Clear**
 removes all exclusions. Older `.lbp` files without exclusions still load.
 
+**If file exists** (*Add/Edit Item* dialog). Each item has a dropdown —
+**Overwrite**, **Skip** or **Overwrite if newer** (the default) — matching the
+buttons of the *File Conflict* dialog. When a plan runs, existing files at the
+destination are handled with the item's choice without asking. Plans saved
+before this option existed use **Overwrite if newer**. The Universal File
+Copier still asks each time.
+
 **Running.** A row shows a progress bar while its plan runs; several plans
 can run at the same time. **Status** shows the progress and the log, using
 the same messages as the Universal File Copier log box. Missing local
@@ -78,6 +85,7 @@ plan from the list. **Unload** only removes it from the list.
             "mtpPath": "Internal shared storage/DCIM/Camera/Thumbnails", "objectId": "o2B7" }
         ]
       },
+      "onConflict": "overwriteIfNewer",
       "destination": {
         "type": "local",
         "deviceId": "D:\\",

@@ -22,6 +22,7 @@
 //                         "objectId": "o1A2"               (mtp) } ],
 //          "exclusions": [ same shape as "entries" — skipped when copying ]
 //        },
+//        "onConflict": "overwrite" | "skip" | "overwriteIfNewer",
 //        "destination": {
 //          "type": "local" | "mtp",
 //          "deviceId": "...", "deviceName": "...", "displayPath": "...",
@@ -37,6 +38,8 @@ struct CPlanItem
 {
     CEndpoint src;
     CEndpoint dst;
+    // When a file already exists at the destination
+    int nOnConflict = CONFLICT_NEWER;   // CONFLICT_OVERWRITE / _SKIP / _NEWER
 };
 
 struct CBackupPlan

@@ -157,7 +157,7 @@ std::vector<CCopyTask> ToTasks(const CBackupPlan& plan)
 {
     std::vector<CCopyTask> tasks;
     for (auto& it : plan.items)
-        tasks.push_back(CCopyTask{ it.src, it.dst });
+        tasks.push_back(CCopyTask{ it.src, it.dst, it.nOnConflict });
     return tasks;
 }
 
@@ -303,6 +303,9 @@ bool Save(const CBackupPlan& plan, const CString& path, CString& err)
     {
         Value o = Value::MakeObject();
         o.Set(L"source",      EndpointToJson(it.src, true));
+        o.Set(L"onConflict",  Value(it.nOnConflict == CONFLICT_OVERWRITE ? L"overwrite"
+                                  : it.nOnConflict == CONFLICT_SKIP      ? L"skip"
+                                                                         : L"overwriteIfNewer"));
         o.Set(L"destination", EndpointToJson(it.dst, false));
         items.Append(o);
     }
@@ -424,6 +427,10 @@ bool Load(const CString& path, CBackupPlan& plan, CString& err)
                        (LPCTSTR)path, idx, (LPCTSTR)e);
             return false;
         }
+        std::wstring oc = v.GetString(L"onConflict", L"overwriteIfNewer");
+        item.nOnConflict = oc == L"overwrite" ? CONFLICT_OVERWRITE
+                         : oc == L"skip"      ? CONFLICT_SKIP
+                                              : CONFLICT_NEWER;   // also for older files
         p.items.push_back(std::move(item));
     }
 

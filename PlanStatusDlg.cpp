@@ -53,7 +53,7 @@ void CPlanStatusDlg::OnBtnStop()
     if (m_entry->bRunning && m_entry->job)
     {
         m_entry->job->Cancel();
-        m_staticStatus.SetWindowText(_T("Cancelling…"));
+        m_staticStatus.SetWindowText(_T("Cancelling\u2026"));
     }
 }
 
@@ -102,7 +102,7 @@ void CPlanStatusDlg::Refresh()
 
     CString status;
     if (e.bRunning)
-        status = e.strStatus.IsEmpty() ? CString(_T("Starting…")) : e.strStatus;
+        status = e.strStatus.IsEmpty() ? CString(_T("Starting\u2026")) : e.strStatus;
     else if (!e.strLastRun.IsEmpty())
         status = e.strLastRun;
     else

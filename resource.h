@@ -85,6 +85,8 @@
 #define IDC_EDIT_EXCL_PATH          4303
 #define IDC_BTN_BROWSE_EXCL         4304
 #define IDC_BTN_CLEAR_EXCL          4305
+#define IDC_STATIC_CONFLICT_LABEL   4306
+#define IDC_COMBO_CONFLICT          4307   // "If file exists:" strategy
 
 // ── Item dialog controls (re-uses the main dialog's source/dest IDs) ────────
 //    IDC_EDIT_SRC_PATH, IDC_BTN_BROWSE_SRC, IDC_EDIT_DST_PATH, IDC_BTN_BROWSE_DST,
@@ -120,7 +122,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NEXT_RESOURCE_VALUE    129
 #define _APS_NEXT_COMMAND_VALUE     32790
-#define _APS_NEXT_CONTROL_VALUE     4306
+#define _APS_NEXT_CONTROL_VALUE     4308
 #define _APS_NEXT_SYMED_VALUE       101
 #endif
 #endif

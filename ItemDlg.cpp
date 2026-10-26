@@ -26,12 +26,24 @@ void CItemDlg::DoDataExchange(CDataExchange* pDX)
     DDX_Control(pDX, IDC_STATIC_DST_TYPE,  m_staticDstType);
     DDX_Control(pDX, IDC_EDIT_EXCL_PATH,   m_editExcl);
     DDX_Control(pDX, IDC_STATIC_EXCL_TYPE, m_staticExclType);
+    DDX_Control(pDX, IDC_COMBO_CONFLICT,   m_comboConflict);
 }
 
 BOOL CItemDlg::OnInitDialog()
 {
     CDialogEx::OnInitDialog();
     SetWindowText(m_bEditMode ? _T("Edit Item") : _T("Add Item"));
+
+    // Same choices as the "File Conflict" dialog; item data = CONFLICT_* value
+    const int policies[] = { CONFLICT_OVERWRITE, CONFLICT_SKIP, CONFLICT_NEWER };
+    for (int p : policies)
+    {
+        int i = m_comboConflict.AddString(ConflictPolicyName(p));
+        m_comboConflict.SetItemData(i, (DWORD_PTR)p);
+        if (p == m_item.nOnConflict) m_comboConflict.SetCurSel(i);
+    }
+    if (m_comboConflict.GetCurSel() < 0) m_comboConflict.SetCurSel(2);   // Overwrite if newer
+
     UpdateUi();
     return TRUE;
 }
@@ -142,7 +154,7 @@ void CItemDlg::DropOutsideExclusions(bool bTellUser)
     if (nDropped > 8)
     {
         CString more;
-        more.Format(_T("\n  … and %d more"), nDropped - 8);
+        more.Format(_T("\n  \u2026 and %d more"), nDropped - 8);
         dropped += more;
     }
     if (bTellUser)
@@ -345,5 +357,7 @@ void CItemDlg::OnOK()
         MessageBox(_T("Please select a destination folder."), _T("Error"), MB_ICONWARNING);
         return;
     }
+    int sel = m_comboConflict.GetCurSel();
+    m_item.nOnConflict = sel >= 0 ? (int)m_comboConflict.GetItemData(sel) : CONFLICT_NEWER;
     CDialogEx::OnOK();
 }
