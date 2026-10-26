@@ -42,7 +42,7 @@ struct CEndpoint
     CString strLocalPath;    // local: absolute path of destination folder
     CString strDeviceId;     // MTP: PnP device ID (local: drive root)
     CString strObjectId;     // MTP: WPD object ID of destination folder
-    CString strMtpPath;      // MTP: name path of destination folder from device root
+    CString strSubPath;      // destination folder below the device / drive root
 
     // ── Common ───────────────────────────────────────────────────────────────
     CString strDeviceName;   // friendly name, used to find the device again
@@ -56,6 +56,10 @@ struct CEndpoint
                         : (!strDeviceId.IsEmpty() && !strObjectId.IsEmpty());
     }
 };
+
+// Local drive root ("D:\\") + sub path → absolute path, and back.
+CString JoinDevicePath(const CString& root, const CString& subPath);
+CString SubPathBelow(const CString& root, const CString& fullPath);
 
 // "Overwrite" / "Skip" / "Overwrite if newer" (or "Ask" for 0)
 CString ConflictPolicyName(int nPolicy);
@@ -159,6 +163,7 @@ private:
 
     bool PrepareTask(CCopyTask& t);
     bool ResolveDevice(CEndpoint& ep);
+    bool ResolveLocal(CEndpoint& ep);
 
     void DoLocalToLocal(const CCopyTask& t);
     void DoLocalToMtp  (const CCopyTask& t);

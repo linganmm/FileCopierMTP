@@ -67,24 +67,36 @@ CString CItemDlg::StateDeviceId(const CBrowserState* pState)
     return pState->devices[i].strDeviceId;
 }
 
-CString CItemDlg::ListDisplay(const CEndpoint& ep, const std::vector<CSourceItem>& list)
+// Same device?  Loaded plans carry only the device name, so compare IDs
+// when both are known and names otherwise.
+static bool SameDevice(bool localA, const CString& idA, const CString& nameA,
+                       bool localB, const CString& idB, const CString& nameB)
 {
-    if (list.empty()) return CString();
-    const CSourceItem& first = list.front();
-    CString s;
-    if (ep.bIsLocal)
-        s = first.strLocalPath.IsEmpty() ? first.strName : first.strLocalPath;
-    else
-        s = ep.strDeviceName + _T(" / ") +
-            (first.strMtpPath.IsEmpty() ? first.strName : first.strMtpPath);
-    int n = (int)list.size();
-    if (n > 1)
+    if (localA != localB) return false;
+    if (!idA.IsEmpty() && !idB.IsEmpty()) return idA.CompareNoCase(idB) == 0;
+    return !nameA.IsEmpty() && nameA == nameB;
+}
+
+// Fill the device-relative sub path of freshly browsed items.
+static void FillSubPaths(std::vector<CSourceItem>& list, bool bLocal, const CString& deviceId)
+{
+    if (bLocal)
     {
-        CString more;
-        more.Format(_T("  (+%d more)"), n - 1);
-        s += more;
+        for (auto& it : list)
+        {
+            if (it.strLocalPath.IsEmpty()) it.strLocalPath = it.strObjectId;
+            it.strSubPath = SubPathBelow(deviceId, it.strLocalPath);
+        }
     }
-    return s;
+    else
+    {
+        // Object IDs change between connections — record the name path.
+        CWaitCursor wait;
+        CWpdHelper wpd;
+        if (wpd.OpenDevice(deviceId))
+            for (auto& it : list)
+                it.strSubPath = wpd.GetFullPath(it.strObjectId);
+    }
 }
 
 // Normalised path for prefix tests: '\' separators (local) or '/' (MTP),
@@ -101,28 +113,18 @@ static CString NormPath(const CString& path, TCHAR sep)
 // True if x is one of the source items or lies inside a source folder.
 bool CItemDlg::IsInsideSource(const CEndpoint& src, const CSourceItem& x)
 {
+    const TCHAR sep = src.bIsLocal ? _T('\\') : _T('/');
     for (auto& it : src.items)
     {
-        CString a, b;
-        TCHAR sep;
-        if (src.bIsLocal)
+        CString a = x.strSubPath.IsEmpty()  ? x.strLocalPath  : x.strSubPath;
+        CString b = it.strSubPath.IsEmpty() ? it.strLocalPath : it.strSubPath;
+        if (a.IsEmpty() || b.IsEmpty())
         {
-            sep = _T('\\');
-            a = NormPath(x.strLocalPath.IsEmpty() ? x.strObjectId : x.strLocalPath, sep);
-            b = NormPath(it.strLocalPath.IsEmpty() ? it.strObjectId : it.strLocalPath, sep);
+            if (!x.strObjectId.IsEmpty() && x.strObjectId == it.strObjectId) return true;
+            continue;
         }
-        else
-        {
-            if (x.strMtpPath.IsEmpty() || it.strMtpPath.IsEmpty())
-            {
-                if (x.strObjectId == it.strObjectId) return true;
-                continue;
-            }
-            sep = _T('/');
-            a = NormPath(x.strMtpPath, sep);
-            b = NormPath(it.strMtpPath, sep);
-        }
-        if (b.IsEmpty()) continue;
+        a = NormPath(a, sep);
+        b = NormPath(b, sep);
         if (a.CompareNoCase(b) == 0) return true;
         if (!it.bIsFolder) continue;
         if (a.GetLength() > b.GetLength() &&
@@ -145,7 +147,7 @@ void CItemDlg::DropOutsideExclusions(bool bTellUser)
         if (IsInsideSource(m_item.src, x)) { keep.push_back(x); continue; }
         if (++nDropped <= 8)
         {
-            CString p = m_item.src.bIsLocal ? x.strLocalPath : x.strMtpPath;
+            CString p = m_item.src.bIsLocal ? x.strLocalPath : x.strSubPath;
             dropped += _T("\n  ") + (p.IsEmpty() ? x.strName : p);
         }
     }
@@ -169,9 +171,9 @@ bool CItemDlg::SourceOk(const CEndpoint& ep)
 
 bool CItemDlg::DestOk(const CEndpoint& ep)
 {
-    if (ep.bIsLocal) return !ep.strLocalPath.IsEmpty();
-    return !ep.strDeviceId.IsEmpty() &&
-           (!ep.strObjectId.IsEmpty() || !ep.strMtpPath.IsEmpty());
+    if (ep.bIsLocal) return !ep.strLocalPath.IsEmpty() || !ep.strSubPath.IsEmpty();
+    return (!ep.strDeviceId.IsEmpty() || !ep.strDeviceName.IsEmpty()) &&
+           (!ep.strObjectId.IsEmpty() || !ep.strSubPath.IsEmpty());
 }
 
 void CItemDlg::UpdateUi()
@@ -181,7 +183,7 @@ void CItemDlg::UpdateUi()
     bool excl = src && !m_item.src.excludes.empty();
     m_editSrc.SetWindowText(src ? m_item.src.strDisplayPath : CString());
     m_editDst.SetWindowText(dst ? m_item.dst.strDisplayPath : CString());
-    m_editExcl.SetWindowText(excl ? ListDisplay(m_item.src, m_item.src.excludes) : CString());
+    m_editExcl.SetWindowText(excl ? PlanFile::ListDisplay(m_item.src, m_item.src.excludes) : CString());
     m_staticSrcType.SetWindowText(!src ? _T("") : (m_item.src.bIsLocal ? _T("[Local]") : _T("[MTP]")));
     m_staticDstType.SetWindowText(!dst ? _T("") : (m_item.dst.bIsLocal ? _T("[Local]") : _T("[MTP]")));
     m_staticExclType.SetWindowText(!excl ? _T("") : (m_item.src.bIsLocal ? _T("[Local]") : _T("[MTP]")));
@@ -211,25 +213,13 @@ void CItemDlg::OnBtnBrowseSrc()
     ep.strDeviceName = DeviceName(m_pSrcState, ep.strDeviceId);
     ep.items         = dlg.m_selectedItems;
 
-    if (ep.bIsLocal)
-    {
-        for (auto& it : ep.items)
-            if (it.strLocalPath.IsEmpty()) it.strLocalPath = it.strObjectId;
-    }
-    else
-    {
-        // Object IDs change between connections — record the name path too.
-        CWaitCursor wait;
-        CWpdHelper wpd;
-        if (wpd.OpenDevice(ep.strDeviceId))
-            for (auto& it : ep.items)
-                it.strMtpPath = wpd.GetFullPath(it.strObjectId);
-    }
-    ep.strDisplayPath = ListDisplay(ep, ep.items);
+    FillSubPaths(ep.items, ep.bIsLocal, ep.strDeviceId);
+    ep.strDisplayPath = PlanFile::ListDisplay(ep, ep.items);
 
     // Keep the exclusions that still fall inside the new source
-    bool sameDevice = (ep.strDeviceId == m_item.src.strDeviceId &&
-                       ep.bIsLocal == m_item.src.bIsLocal);
+    bool sameDevice = SameDevice(ep.bIsLocal, ep.strDeviceId, ep.strDeviceName,
+                                 m_item.src.bIsLocal, m_item.src.strDeviceId,
+                                 m_item.src.strDeviceName);
     if (sameDevice) ep.excludes = m_item.src.excludes;
 
     m_item.src = ep;
@@ -251,8 +241,13 @@ void CItemDlg::OnBtnBrowseExcl()
     // browser is already showing that device.
     if (m_pExclState)
     {
-        if (StateDeviceId(m_pExclState) != m_item.src.strDeviceId &&
-            m_pSrcState && StateDeviceId(m_pSrcState) == m_item.src.strDeviceId)
+        CString exclDev = StateDeviceId(m_pExclState);
+        CString srcDev  = StateDeviceId(m_pSrcState);
+        bool exclOnSource = SameDevice(m_item.src.bIsLocal, exclDev, DeviceName(m_pExclState, exclDev),
+                                       m_item.src.bIsLocal, m_item.src.strDeviceId, m_item.src.strDeviceName);
+        bool srcOnSource  = SameDevice(m_item.src.bIsLocal, srcDev, DeviceName(m_pSrcState, srcDev),
+                                       m_item.src.bIsLocal, m_item.src.strDeviceId, m_item.src.strDeviceName);
+        if (!exclOnSource && srcOnSource && m_pSrcState)
         {
             *m_pExclState = *m_pSrcState;
             m_pExclState->strLastSelDisplayPath.Empty();
@@ -262,8 +257,15 @@ void CItemDlg::OnBtnBrowseExcl()
         {
             snap.bSelected = false;
             for (auto& x : m_item.src.excludes)
+            {
                 if (!x.strObjectId.IsEmpty() && x.strObjectId == snap.item.strObjectId)
                     snap.bSelected = true;
+                // Plans loaded from disk only know the sub path (local drives)
+                else if (m_item.src.bIsLocal && !x.strSubPath.IsEmpty() &&
+                         x.strSubPath.CompareNoCase(
+                             SubPathBelow(StateDeviceId(m_pExclState), snap.item.strLocalPath)) == 0)
+                    snap.bSelected = true;
+            }
         }
     }
 
@@ -273,8 +275,9 @@ void CItemDlg::OnBtnBrowseExcl()
     dlg.m_strCaption  = _T("Select Files / Folders to Exclude");
     if (dlg.DoModal() != IDOK) return;
 
-    if (dlg.m_strSelectedDeviceId != m_item.src.strDeviceId ||
-        (dlg.m_bIsLocalDisk ? true : false) != m_item.src.bIsLocal)
+    CString pickedId = dlg.m_strSelectedDeviceId;
+    if (!SameDevice(dlg.m_bIsLocalDisk, pickedId, DeviceName(m_pExclState, pickedId),
+                    m_item.src.bIsLocal, m_item.src.strDeviceId, m_item.src.strDeviceName))
     {
         CString name = m_item.src.strDeviceName.IsEmpty() ? m_item.src.strDeviceId
                                                           : m_item.src.strDeviceName;
@@ -284,19 +287,8 @@ void CItemDlg::OnBtnBrowseExcl()
     }
 
     std::vector<CSourceItem> list = dlg.m_selectedItems;
-    if (m_item.src.bIsLocal)
-    {
-        for (auto& it : list)
-            if (it.strLocalPath.IsEmpty()) it.strLocalPath = it.strObjectId;
-    }
-    else
-    {
-        CWaitCursor wait;
-        CWpdHelper wpd;
-        if (wpd.OpenDevice(m_item.src.strDeviceId))
-            for (auto& it : list)
-                it.strMtpPath = wpd.GetFullPath(it.strObjectId);
-    }
+    FillSubPaths(list, m_item.src.bIsLocal, pickedId);
+    if (m_item.src.strDeviceId.IsEmpty()) m_item.src.strDeviceId = pickedId;   // loaded plan
 
     m_item.src.excludes = list;            // the selection replaces the old list
     DropOutsideExclusions(true);
@@ -326,8 +318,8 @@ void CItemDlg::OnBtnBrowseDst()
 
     if (ep.bIsLocal)
     {
-        ep.strLocalPath   = dlg.m_strSelectedLocalPath;
-        ep.strDisplayPath = ep.strLocalPath;
+        ep.strLocalPath = dlg.m_strSelectedLocalPath;
+        ep.strSubPath   = SubPathBelow(ep.strDeviceId, ep.strLocalPath);
     }
     else
     {
@@ -335,11 +327,10 @@ void CItemDlg::OnBtnBrowseDst()
         CWaitCursor wait;
         CWpdHelper wpd;
         if (wpd.OpenDevice(ep.strDeviceId))
-            ep.strMtpPath = wpd.GetFullPath(ep.strObjectId);
-        ep.strDisplayPath = ep.strMtpPath.IsEmpty()
-                            ? dlg.m_strSelectedDisplayPath
-                            : ep.strDeviceName + _T(" / ") + ep.strMtpPath;
+            ep.strSubPath = wpd.GetFullPath(ep.strObjectId);
     }
+    ep.strDisplayPath = PlanFile::DestDisplay(ep);
+    if (ep.strDisplayPath.IsEmpty()) ep.strDisplayPath = dlg.m_strSelectedDisplayPath;
 
     m_item.dst = ep;
     UpdateUi();

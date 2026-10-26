@@ -5,6 +5,27 @@ namespace fs = std::filesystem;
 
 std::atomic<UINT> CCopyJob::s_nextId{ 1 };
 
+CString JoinDevicePath(const CString& root, const CString& subPath)
+{
+    CString r = root;
+    if (subPath.IsEmpty()) return r;
+    if (!r.IsEmpty() && r.Right(1) != _T("\\") && r.Right(1) != _T("/")) r += _T('\\');
+    CString s = subPath;
+    s.Replace(_T('/'), _T('\\'));
+    s.TrimLeft(_T('\\'));
+    return r + s;
+}
+
+CString SubPathBelow(const CString& root, const CString& fullPath)
+{
+    if (root.IsEmpty() || fullPath.GetLength() < root.GetLength() ||
+        fullPath.Left(root.GetLength()).CompareNoCase(root) != 0)
+        return CString();
+    CString s = fullPath.Mid(root.GetLength());
+    s.TrimLeft(_T('\\'));
+    return s;
+}
+
 CString ConflictPolicyName(int nPolicy)
 {
     switch (nPolicy)
@@ -396,32 +417,74 @@ void CCopyJob::Run()
 
 // ── Device / path resolution for saved plans ─────────────────────────────────
 
+// Finds the device / drive named in the plan and sets ep.strDeviceId.
+// Order: exact friendly name → (local drives) the same volume label under a
+// different drive letter, if unique → the device ID of an older plan file.
 bool CCopyJob::ResolveDevice(CEndpoint& ep)
 {
     auto devices = CWpdHelper::EnumerateDevices();
-    for (auto& d : devices)
-        if (!d.bIsLocalDisk && d.strDeviceId.CompareNoCase(ep.strDeviceId) == 0)
-            return true;
 
-    // The PnP ID changes when the phone is plugged into another USB port —
-    // fall back to the friendly name.
     if (!ep.strDeviceName.IsEmpty())
     {
         for (auto& d : devices)
-        {
-            if (!d.bIsLocalDisk && d.strFriendlyName == ep.strDeviceName)
+            if (d.bIsLocalDisk == ep.bIsLocal && d.strFriendlyName == ep.strDeviceName)
             {
                 ep.strDeviceId = d.strDeviceId;
+                return true;
+            }
+
+        if (ep.bIsLocal)
+        {
+            // "Data (D:)" → label "Data"
+            CString label = ep.strDeviceName;
+            int paren = label.ReverseFind(_T('('));
+            if (paren > 0) label = label.Left(paren);
+            label.TrimRight();
+            const MtpDeviceInfo* pMatch = nullptr;
+            int n = 0;
+            for (auto& d : devices)
+                if (d.bIsLocalDisk && !label.IsEmpty() && d.strVolumeLabel == label)
+                { pMatch = &d; ++n; }
+            if (n == 1)
+            {
+                PostLog(_T("Drive \"") + ep.strDeviceName + _T("\" is now ") + pMatch->strFriendlyName);
+                ep.strDeviceId = pMatch->strDeviceId;
                 return true;
             }
         }
     }
 
+    // Plan files written before device IDs were dropped
+    if (!ep.strDeviceId.IsEmpty())
+        for (auto& d : devices)
+            if (d.bIsLocalDisk == ep.bIsLocal && d.strDeviceId.CompareNoCase(ep.strDeviceId) == 0)
+                return true;
+
     CString name = ep.strDeviceName.IsEmpty() ? ep.strDeviceId : ep.strDeviceName;
-    PostError(_T("Device not connected: ") + name +
-              _T(" (unlock the phone and select 'File Transfer' mode)"));
+    if (ep.bIsLocal)
+        PostError(_T("Drive not found: ") + name);
+    else
+        PostError(_T("Device not connected: ") + name +
+                  _T(" (unlock the phone and select 'File Transfer' mode)"));
     ++m_nAllErrors;
     return false;
+}
+
+// Local endpoint from a plan: find the drive, then root + sub path.
+bool CCopyJob::ResolveLocal(CEndpoint& ep)
+{
+    if (!ResolveDevice(ep)) return false;
+    const CString& root = ep.strDeviceId;
+    auto fix = [&root](CSourceItem& it) {
+        if (it.strSubPath.IsEmpty() && !it.strLocalPath.IsEmpty()) return;  // old plan file
+        it.strLocalPath = JoinDevicePath(root, it.strSubPath);
+        it.strObjectId  = it.strLocalPath;
+    };
+    for (auto& it : ep.items)    fix(it);
+    for (auto& x  : ep.excludes) fix(x);
+    if (!ep.strSubPath.IsEmpty() || ep.strLocalPath.IsEmpty())
+        ep.strLocalPath = JoinDevicePath(root, ep.strSubPath);
+    return true;
 }
 
 // Every failure posts one [ERR] line and adds one to the run's error count.
@@ -444,11 +507,11 @@ bool CCopyJob::PrepareTask(CCopyTask& t)
         std::vector<CSourceItem> found;
         for (auto& it : t.src.items)
         {
-            if (it.strMtpPath.IsEmpty()) { found.push_back(it); continue; }
-            CString id = wpd.ResolveObjectId(_T(""), it.strMtpPath);
+            if (it.strSubPath.IsEmpty()) { found.push_back(it); continue; }
+            CString id = wpd.ResolveObjectId(_T(""), it.strSubPath);
             if (id.IsEmpty())
             {
-                PostError(_T("Source not found on device: ") + it.strMtpPath);
+                PostError(_T("Source not found on device: ") + it.strSubPath);
                 ++m_nAllErrors; ++nMissing;
                 continue;
             }
@@ -462,11 +525,11 @@ bool CCopyJob::PrepareTask(CCopyTask& t)
         std::vector<CSourceItem> excl;
         for (auto& x : t.src.excludes)
         {
-            if (x.strMtpPath.IsEmpty()) { excl.push_back(x); continue; }
-            CString id = wpd.ResolveObjectId(_T(""), x.strMtpPath);
+            if (x.strSubPath.IsEmpty()) { excl.push_back(x); continue; }
+            CString id = wpd.ResolveObjectId(_T(""), x.strSubPath);
             if (id.IsEmpty())
             {
-                PostLog(_T("Exclusion not found on device (nothing to skip): ") + x.strMtpPath);
+                PostLog(_T("Exclusion not found on device (nothing to skip): ") + x.strSubPath);
                 continue;
             }
             CSourceItem c = x;
@@ -477,6 +540,7 @@ bool CCopyJob::PrepareTask(CCopyTask& t)
     }
     else
     {
+        if (!ResolveLocal(t.src)) return false;
         std::vector<CSourceItem> found;
         for (auto& it : t.src.items)
         {
@@ -507,6 +571,7 @@ bool CCopyJob::PrepareTask(CCopyTask& t)
     // ── Destination ───────────────────────────────────────────────────────────
     if (t.dst.bIsLocal)
     {
+        if (!ResolveLocal(t.dst)) return false;
         if (t.dst.strLocalPath.IsEmpty())
         {
             PostError(_T("No destination folder set.")); ++m_nAllErrors;
@@ -528,7 +593,7 @@ bool CCopyJob::PrepareTask(CCopyTask& t)
     {
         if (!ResolveDevice(t.dst)) return false;
 
-        if (!t.dst.strMtpPath.IsEmpty())
+        if (!t.dst.strSubPath.IsEmpty())
         {
             CWpdHelper wpd;
             if (!wpd.OpenDevice(t.dst.strDeviceId))
@@ -536,16 +601,16 @@ bool CCopyJob::PrepareTask(CCopyTask& t)
                 PostError(_T("Failed to open destination device: ") + t.dst.strDeviceName); ++m_nAllErrors;
                 return false;
             }
-            CString id = wpd.ResolveObjectId(_T(""), t.dst.strMtpPath);
+            CString id = wpd.ResolveObjectId(_T(""), t.dst.strSubPath);
             if (id.IsEmpty())
             {
-                id = EnsureMtpFolders(wpd, _T(""), t.dst.strMtpPath);
+                id = EnsureMtpFolders(wpd, _T(""), t.dst.strSubPath);
                 if (!id.IsEmpty())
-                    PostLog(_T("Created destination folder on device: ") + t.dst.strMtpPath);
+                    PostLog(_T("Created destination folder on device: ") + t.dst.strSubPath);
             }
             if (id.IsEmpty())
             {
-                PostError(_T("Destination folder not found on device: ") + t.dst.strMtpPath); ++m_nAllErrors;
+                PostError(_T("Destination folder not found on device: ") + t.dst.strSubPath); ++m_nAllErrors;
                 return false;
             }
             t.dst.strObjectId = id;

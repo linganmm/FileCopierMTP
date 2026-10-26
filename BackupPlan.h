@@ -15,23 +15,20 @@
 //      {                                   ← one JSON object per item
 //        "source": {
 //          "type": "local" | "mtp",
-//          "deviceId": "...", "deviceName": "...", "displayPath": "...",
-//          "entries": [ { "name": "...", "isFolder": true,
-//                         "path": "C:\\..."               (local)
-//                         "mtpPath": "Internal shared storage/DCIM",
-//                         "objectId": "o1A2"               (mtp) } ],
+//          "deviceName": "Pixel 8"  /  "Data (D:)",
+//          "entries":    [ { "name": "Camera", "isFolder": true,
+//                            "subPath": "Internal shared storage/DCIM/Camera" } ],
 //          "exclusions": [ same shape as "entries" — skipped when copying ]
 //        },
 //        "onConflict": "overwrite" | "skip" | "overwriteIfNewer",
-//        "destination": {
-//          "type": "local" | "mtp",
-//          "deviceId": "...", "deviceName": "...", "displayPath": "...",
-//          "path": "D:\\Backup"                            (local)
-//          "mtpPath": "...", "objectId": "..."             (mtp)
-//        }
+//        "destination": { "type": "local", "deviceName": "Data (D:)",
+//                         "subPath": "Backup\\Phone" }
 //      }
 //    ]
 //  }
+//
+//  No device IDs, object IDs or absolute paths are stored: a run finds the
+//  device / drive by name and rebuilds the real path (see CCopyJob).
 // ─────────────────────────────────────────────────────────────────────────────
 
 struct CPlanItem
@@ -85,6 +82,11 @@ namespace PlanFile
 
     // One-line, human-readable endpoint description: "[Local] C:\Photos (+2 more)"
     CString DescribeEndpoint(const CEndpoint& ep);
+
+    // "Data (D:) / Users\Me\Pictures  (+2 more)" for a list of source items,
+    // "Pixel 8 / Internal shared storage/Backup" for a destination.
+    CString ListDisplay(const CEndpoint& ep, const std::vector<CSourceItem>& list);
+    CString DestDisplay(const CEndpoint& ep);
 
     std::vector<CCopyTask> ToTasks(const CBackupPlan& plan);
 

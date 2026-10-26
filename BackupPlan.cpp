@@ -153,6 +153,28 @@ CString DescribeEndpoint(const CEndpoint& ep)
     return tag + ep.strDisplayPath;
 }
 
+CString ListDisplay(const CEndpoint& ep, const std::vector<CSourceItem>& list)
+{
+    if (list.empty()) return CString();
+    const CSourceItem& first = list.front();
+    CString where = !first.strSubPath.IsEmpty() ? first.strSubPath
+                  : !first.strLocalPath.IsEmpty() ? first.strLocalPath : first.strName;
+    CString s = ep.strDeviceName.IsEmpty() ? where : ep.strDeviceName + _T(" / ") + where;
+    if (list.size() > 1)
+    {
+        CString more;
+        more.Format(_T("  (+%d more)"), (int)list.size() - 1);
+        s += more;
+    }
+    return s;
+}
+
+CString DestDisplay(const CEndpoint& ep)
+{
+    CString where = !ep.strSubPath.IsEmpty() ? ep.strSubPath : ep.strLocalPath;
+    return ep.strDeviceName.IsEmpty() ? where : ep.strDeviceName + _T(" / ") + where;
+}
+
 std::vector<CCopyTask> ToTasks(const CBackupPlan& plan)
 {
     std::vector<CCopyTask> tasks;
@@ -163,7 +185,10 @@ std::vector<CCopyTask> ToTasks(const CBackupPlan& plan)
 
 // ── JSON mapping ──────────────────────────────────────────────────────────────
 
-static Value EntriesToJson(const std::vector<CSourceItem>& list, bool bLocal)
+// Only the device NAME and the path below the device root are stored.
+// Device IDs, object IDs and absolute paths are looked up again at run time.
+
+static Value EntriesToJson(const std::vector<CSourceItem>& list)
 {
     Value entries = Value::MakeArray();
     for (auto& it : list)
@@ -171,43 +196,42 @@ static Value EntriesToJson(const std::vector<CSourceItem>& list, bool bLocal)
         Value e = Value::MakeObject();
         e.Set(L"name",     Value(W(it.strName)));
         e.Set(L"isFolder", Value(it.bIsFolder));
-        if (bLocal)
-        {
-            e.Set(L"path", Value(W(it.strLocalPath.IsEmpty() ? it.strObjectId
-                                                             : it.strLocalPath)));
-        }
-        else
-        {
-            e.Set(L"mtpPath",  Value(W(it.strMtpPath)));
-            e.Set(L"objectId", Value(W(it.strObjectId)));
-        }
+        e.Set(L"subPath",  Value(W(it.strSubPath)));
         entries.Append(e);
     }
     return entries;
 }
 
-static void EntriesFromJson(const Value* entries, bool bLocal, std::vector<CSourceItem>& out)
+static void EntriesFromJson(const Value* entries, const CEndpoint& ep,
+                            std::vector<CSourceItem>& out)
 {
     if (!entries || !entries->IsArray()) return;
     for (auto& e : entries->Items())
     {
         if (!e.IsObject()) continue;
         CSourceItem si;
-        si.strName   = C(e.GetString(L"name"));
-        si.bIsFolder = e.GetBool(L"isFolder");
-        if (bLocal)
+        si.strName    = C(e.GetString(L"name"));
+        si.bIsFolder  = e.GetBool(L"isFolder");
+        si.strSubPath = C(e.GetString(L"subPath"));
+
+        // Older plan files: "mtpPath"/"objectId" (MTP) or absolute "path" (local)
+        if (si.strSubPath.IsEmpty())
         {
-            si.strLocalPath = C(e.GetString(L"path"));
-            si.strObjectId  = si.strLocalPath;     // local IDs are paths
-        }
-        else
-        {
-            si.strMtpPath  = C(e.GetString(L"mtpPath"));
-            si.strObjectId = C(e.GetString(L"objectId"));
+            if (ep.bIsLocal)
+            {
+                CString path = C(e.GetString(L"path"));
+                si.strSubPath = SubPathBelow(ep.strDeviceId, path);
+                if (si.strSubPath.IsEmpty()) { si.strLocalPath = path; si.strObjectId = path; }
+            }
+            else
+            {
+                si.strSubPath  = C(e.GetString(L"mtpPath"));
+                if (si.strSubPath.IsEmpty()) si.strObjectId = C(e.GetString(L"objectId"));
+            }
         }
         if (si.strName.IsEmpty())
         {
-            CString p = bLocal ? si.strLocalPath : si.strMtpPath;
+            CString p = si.strSubPath.IsEmpty() ? si.strLocalPath : si.strSubPath;
             p.Replace(_T('/'), _T('\\'));
             p.TrimRight(_T('\\'));
             int pos = p.ReverseFind(_T('\\'));
@@ -220,24 +244,16 @@ static void EntriesFromJson(const Value* entries, bool bLocal, std::vector<CSour
 static Value EndpointToJson(const CEndpoint& ep, bool bSource)
 {
     Value o = Value::MakeObject();
-    o.Set(L"type",        Value(ep.bIsLocal ? L"local" : L"mtp"));
-    o.Set(L"deviceId",    Value(W(ep.strDeviceId)));
-    o.Set(L"deviceName",  Value(W(ep.strDeviceName)));
-    o.Set(L"displayPath", Value(W(ep.strDisplayPath)));
-
+    o.Set(L"type",       Value(ep.bIsLocal ? L"local" : L"mtp"));
+    o.Set(L"deviceName", Value(W(ep.strDeviceName)));
     if (bSource)
     {
-        o.Set(L"entries",    EntriesToJson(ep.items, ep.bIsLocal));
-        o.Set(L"exclusions", EntriesToJson(ep.excludes, ep.bIsLocal));
-    }
-    else if (ep.bIsLocal)
-    {
-        o.Set(L"path", Value(W(ep.strLocalPath)));
+        o.Set(L"entries",    EntriesToJson(ep.items));
+        o.Set(L"exclusions", EntriesToJson(ep.excludes));
     }
     else
     {
-        o.Set(L"mtpPath",  Value(W(ep.strMtpPath)));
-        o.Set(L"objectId", Value(W(ep.strObjectId)));
+        o.Set(L"subPath", Value(W(ep.strSubPath)));
     }
     return o;
 }
@@ -252,24 +268,34 @@ static bool EndpointFromJson(const Value* v, bool bSource, CEndpoint& ep, CStrin
     }
     std::wstring type = v->GetString(L"type", L"local");
     ep = CEndpoint{};
-    ep.bIsLocal       = (type != L"mtp");
-    ep.strDeviceId    = C(v->GetString(L"deviceId"));
-    ep.strDeviceName  = C(v->GetString(L"deviceName"));
-    ep.strDisplayPath = C(v->GetString(L"displayPath"));
+    ep.bIsLocal      = (type != L"mtp");
+    ep.strDeviceName = C(v->GetString(L"deviceName"));
+    ep.strDeviceId   = C(v->GetString(L"deviceId"));   // older files only; never written
 
     if (bSource)
     {
-        EntriesFromJson(v->Find(L"entries"),    ep.bIsLocal, ep.items);
-        EntriesFromJson(v->Find(L"exclusions"), ep.bIsLocal, ep.excludes);
-    }
-    else if (ep.bIsLocal)
-    {
-        ep.strLocalPath = C(v->GetString(L"path"));
+        EntriesFromJson(v->Find(L"entries"),    ep, ep.items);
+        EntriesFromJson(v->Find(L"exclusions"), ep, ep.excludes);
+        ep.strDisplayPath = ListDisplay(ep, ep.items);
     }
     else
     {
-        ep.strMtpPath  = C(v->GetString(L"mtpPath"));
-        ep.strObjectId = C(v->GetString(L"objectId"));
+        ep.strSubPath = C(v->GetString(L"subPath"));
+        if (ep.strSubPath.IsEmpty())
+        {
+            if (ep.bIsLocal)
+            {
+                CString path = C(v->GetString(L"path"));
+                ep.strSubPath = SubPathBelow(ep.strDeviceId, path);
+                if (ep.strSubPath.IsEmpty()) ep.strLocalPath = path;
+            }
+            else
+            {
+                ep.strSubPath = C(v->GetString(L"mtpPath"));
+                if (ep.strSubPath.IsEmpty()) ep.strObjectId = C(v->GetString(L"objectId"));
+            }
+        }
+        ep.strDisplayPath = DestDisplay(ep);
     }
     return true;
 }

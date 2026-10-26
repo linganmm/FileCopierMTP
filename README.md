@@ -62,6 +62,15 @@ plan from the list. **Unload** only removes it from the list.
 
 ### `.lbp` file format (UTF-8 JSON)
 
+A plan stores only the **device name** and the **path below the device root**
+(`subPath`), with no device IDs, MTP object IDs or absolute paths. When a plan
+runs, each device or drive is found by name: a phone by its friendly name; a
+drive by its "Label (D:)" name, or, if the letter changed, by its volume label
+when exactly one drive has that label. The real path or object ID is then
+rebuilt from `subPath`. Older plan files that still contain IDs and absolute
+paths load and run; they are written in the new form the next time they are
+saved.
+
 ```json
 {
   "format": "LXFreeBack Backup Plan",
@@ -73,33 +82,28 @@ plan from the list. **Unload** only removes it from the list.
     {
       "source": {
         "type": "mtp",
-        "deviceId": "\\\\?\\usb#vid_18d1&pid_4ee1#...",
         "deviceName": "Pixel 8",
-        "displayPath": "Pixel 8 / Internal shared storage/DCIM/Camera",
         "entries": [
           { "name": "Camera", "isFolder": true,
-            "mtpPath": "Internal shared storage/DCIM/Camera", "objectId": "o2A1" }
+            "subPath": "Internal shared storage/DCIM/Camera" }
         ],
         "exclusions": [
           { "name": "Thumbnails", "isFolder": true,
-            "mtpPath": "Internal shared storage/DCIM/Camera/Thumbnails", "objectId": "o2B7" }
+            "subPath": "Internal shared storage/DCIM/Camera/Thumbnails" }
         ]
       },
       "onConflict": "overwriteIfNewer",
       "destination": {
         "type": "local",
-        "deviceId": "D:\\",
         "deviceName": "Data (D:)",
-        "displayPath": "D:\\Backup\\Phone",
-        "path": "D:\\Backup\\Phone"
+        "subPath": "Backup\\Phone"
       }
     }
   ]
 }
 ```
 
-Local source entries and exclusions carry `"path"` instead of
-`"mtpPath"`/`"objectId"`.
+MTP sub paths use `/`; local sub paths use `\` and exclude the drive root.
 
 ---
 

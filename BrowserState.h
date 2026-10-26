@@ -22,12 +22,13 @@ struct CSourceItem
     // Local
     CString strLocalPath;     // absolute path, e.g. "C:\\foo\\bar" or "C:\\foo\\bar\\file.txt"
 
-    // MTP only: full name path from the device root, e.g.
-    // "Internal shared storage/DCIM/Camera".  Filled when an item is stored in
-    // a backup plan, because WPD object IDs are not stable between sessions
-    // (Android re-numbers them on every connection).  The plan runner resolves
-    // this path back to a fresh object ID before copying.
-    CString strMtpPath;
+    // Path below the device / drive root, as stored in backup plans:
+    //   MTP:   "Internal shared storage/DCIM/Camera"  ('/' separators)
+    //   Local: "Users\Me\Pictures"                  (drive root "D:\" excluded)
+    // Plans keep only the device name + this sub path; the plan runner finds
+    // the device by name and rebuilds the real path / fresh object ID (WPD
+    // object IDs and PnP device IDs change between connections).
+    CString strSubPath;
 };
 
 // ── TreeNodeSnapshot ──────────────────────────────────────────────────────────

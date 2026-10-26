@@ -51,7 +51,6 @@ private:
 
     void UpdateUi();
     static CString DeviceName(const CBrowserState* pState, const CString& deviceId);
-    static CString ListDisplay(const CEndpoint& ep, const std::vector<CSourceItem>& list);
     static bool    IsInsideSource(const CEndpoint& src, const CSourceItem& x);
     void           DropOutsideExclusions(bool bTellUser);
     static CString StateDeviceId(const CBrowserState* pState);
