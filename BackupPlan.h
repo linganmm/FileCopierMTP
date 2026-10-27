@@ -18,9 +18,11 @@
 //          "deviceName": "Pixel 8"  /  "Data (D:)",
 //          "entries":    [ { "name": "Camera", "isFolder": true,
 //                            "subPath": "Internal shared storage/DCIM/Camera" } ],
-//          "exclusions": [ same shape as "entries" — skipped when copying ]
+//          "exclusions": [ same shape as "entries" — skipped when copying ],
+//          "excludePatterns": [ "A.*B", "\\.tmp$" ]  ← regexes on file/folder names
 //        },
 //        "onConflict": "overwrite" | "skip" | "overwriteIfNewer",
+//        "modifiedWithin": "day" | "week" | "month"   (omitted = any time)
 //        "destination": { "type": "local", "deviceName": "Data (D:)",
 //                         "subPath": "Backup\\Phone" }
 //      }
@@ -37,6 +39,8 @@ struct CPlanItem
     CEndpoint dst;
     // When a file already exists at the destination
     int nOnConflict = CONFLICT_NEWER;   // CONFLICT_OVERWRITE / _SKIP / _NEWER
+    // Only copy files modified within this period (MODIFIED_ANY = all files)
+    int nModifiedWithin = MODIFIED_ANY;
 };
 
 struct CBackupPlan

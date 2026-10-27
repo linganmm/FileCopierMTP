@@ -34,15 +34,31 @@ devices in any direction).
 * Changing the title of a saved plan renames its file.
 * A plan appears in the main list once it has been saved.
 
-**Exclusions** (*Add/Edit Item* dialog). The optional **Exclusion:** row picks
-files and folders *inside* the source that must not be copied, using the same
-Ctrl+Click browser as **Source** (it opens on the source's device with the
-source tree already expanded). An excluded folder is skipped together with
-everything under it, and is not even scanned. Example: source `A\` with
-sub-folders `a1\`, `a2\`, `a3\` and exclusion `A\a3` copies `A\a1` and
-`A\a2` only. Exclusions must be on the same device as the source; anything
-outside the selected source folders is removed with a notice. **Clear**
-removes all exclusions. Older `.lbp` files without exclusions still load.
+**Exclusions** (*Add/Edit Item* dialog). The **Exclusion:** box is editable
+and holds comma-separated conditions:
+
+* `"quoted"` entries are exact files or folders, given as paths below the
+  device root. **Browse…** adds them: it opens on the source's device with
+  the source tree already expanded. An excluded folder is skipped along with
+  everything under it, without being scanned. Example: source `A\` with
+  sub-folders `a1\`, `a2\`, `a3\` and exclusion `"…\A\a3"` copies `A\a1`
+  and `A\a2` only.
+* Other entries are **regular expressions** matched against the whole name of
+  every file and folder below the source. Matching is case-insensitive and
+  uses ECMAScript syntax. `A.*B` skips names that start with `A` and end with
+  `B`; `.*\.tmp` skips `.tmp` files. A folder whose name matches is skipped
+  with everything under it.
+* Commas inside `()`, `[]` or `{}` (as in `x{1,3}`) do not split a condition;
+  `\,` gives a literal comma.
+
+Quoted paths must be inside the selected source folders. Invalid regular
+expressions are reported when you click OK. **Clear** empties the box.
+
+**Modified within** (*Add/Edit Item* dialog). Blank by default, which copies
+every file except the excluded ones. Choose **1 day**, **1 week** or
+**1 month** (a calendar month) to copy only files whose last-modified time is
+within that period before the run starts. A file whose time can't be read is
+copied.
 
 **If file exists** (*Add/Edit Item* dialog). Each item has a dropdown —
 **Overwrite**, **Skip** or **Overwrite if newer** (the default) — matching the
@@ -91,9 +107,11 @@ saved.
         "exclusions": [
           { "name": "Thumbnails", "isFolder": true,
             "subPath": "Internal shared storage/DCIM/Camera/Thumbnails" }
-        ]
+        ],
+        "excludePatterns": [ "A.*B", ".*\\.tmp" ]
       },
       "onConflict": "overwriteIfNewer",
+      "modifiedWithin": "week",
       "destination": {
         "type": "local",
         "deviceName": "Data (D:)",

@@ -64,10 +64,11 @@ CString CPlanDlg::RowTitle(int index) const
     const CEndpoint& src = m_plan.items[index].src;
     CString s;
     s.Format(_T("%d.  %s"), index + 1, (LPCTSTR)PlanFile::DescribeEndpoint(src));
-    if (!src.excludes.empty())
+    int nExcl = (int)(src.excludes.size() + src.excludePatterns.size());
+    if (nExcl > 0)
     {
         CString x;
-        x.Format(_T("   (excluding %d)"), (int)src.excludes.size());
+        x.Format(_T("   (excluding %d)"), nExcl);
         s += x;
     }
     return s;
@@ -77,7 +78,9 @@ CString CPlanDlg::RowSubtitle(int index) const
 {
     const CPlanItem& it = m_plan.items[index];
     return _T("\u2192  ") + PlanFile::DescribeEndpoint(it.dst) +
-           _T("     [if file exists: ") + ConflictPolicyName(it.nOnConflict) + _T("]");
+           _T("     [if file exists: ") + ConflictPolicyName(it.nOnConflict) +
+           (it.nModifiedWithin == MODIFIED_ANY ? CString()
+            : _T(", modified within ") + ModifiedWithinName(it.nModifiedWithin)) + _T("]");
 }
 
 void CPlanDlg::RefreshRows(int fromIndex)

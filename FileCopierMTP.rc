@@ -200,7 +200,7 @@ END
 // =============================================================================
 //  IDD_ITEM_DIALOG  ("Add Item" / "Edit Item")
 // =============================================================================
-IDD_ITEM_DIALOG DIALOGEX 0, 0, 460, 126
+IDD_ITEM_DIALOG DIALOGEX 0, 0, 460, 134
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_VISIBLE |
       WS_CAPTION | WS_SYSMENU
 CAPTION "Add Item"
@@ -212,27 +212,35 @@ BEGIN
                 ES_AUTOHSCROLL | ES_READONLY | WS_TABSTOP
     PUSHBUTTON  "Browse...", IDC_BTN_BROWSE_SRC, 390, 9, 62, 16
 
-    // Files / folders inside the source that are NOT copied (optional)
+    // Things inside the source that are NOT copied (optional, editable):
+    // comma-separated; "quoted" = exact path, otherwise a regular expression
+    // matched against file / folder names
     LTEXT       "Exclusion:", IDC_STATIC_EXCL_LABEL, 8, 32, 40, 10
     LTEXT       "",           IDC_STATIC_EXCL_TYPE,  50, 32, 32, 10
-    EDITTEXT    IDC_EDIT_EXCL_PATH, 84, 30, 234, 14,
-                ES_AUTOHSCROLL | ES_READONLY | WS_TABSTOP
+    EDITTEXT    IDC_EDIT_EXCL_PATH, 84, 30, 234, 14, ES_AUTOHSCROLL | WS_TABSTOP
     PUSHBUTTON  "Clear",     IDC_BTN_CLEAR_EXCL,  322, 29, 62, 16
     PUSHBUTTON  "Browse...", IDC_BTN_BROWSE_EXCL, 390, 29, 62, 16
+    LTEXT       "Comma-separated. ""Quoted"" entries are exact paths (Browse... adds them); others are regular expressions on file/folder names, e.g.  A.*B",
+                IDC_STATIC_EXCL_HINT, 84, 46, 368, 16
 
-    LTEXT       "Destination:", IDC_STATIC_DST_LABEL, 8, 52, 44, 10
-    LTEXT       "",             IDC_STATIC_DST_TYPE,  54, 52, 30, 10
-    EDITTEXT    IDC_EDIT_DST_PATH, 84, 50, 300, 14,
+    LTEXT       "Destination:", IDC_STATIC_DST_LABEL, 8, 68, 44, 10
+    LTEXT       "",             IDC_STATIC_DST_TYPE,  54, 68, 30, 10
+    EDITTEXT    IDC_EDIT_DST_PATH, 84, 66, 300, 14,
                 ES_AUTOHSCROLL | ES_READONLY | WS_TABSTOP
-    PUSHBUTTON  "Browse...", IDC_BTN_BROWSE_DST, 390, 49, 62, 16
+    PUSHBUTTON  "Browse...", IDC_BTN_BROWSE_DST, 390, 65, 62, 16
 
     // Strategy when a file already exists at the destination
-    LTEXT       "If file exists:", IDC_STATIC_CONFLICT_LABEL, 8, 72, 56, 10
-    COMBOBOX    IDC_COMBO_CONFLICT, 84, 70, 140, 60,
+    LTEXT       "If file exists:", IDC_STATIC_CONFLICT_LABEL, 8, 90, 56, 10
+    COMBOBOX    IDC_COMBO_CONFLICT, 84, 88, 120, 60,
                 CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
 
-    DEFPUSHBUTTON "OK",     IDOK,     316, 102, 66, 16
-    PUSHBUTTON    "Cancel", IDCANCEL, 386, 102, 66, 16
+    // Only copy files modified within the period (blank = all files)
+    LTEXT       "Modified within:", IDC_STATIC_MODIFIED_LABEL, 220, 90, 60, 10
+    COMBOBOX    IDC_COMBO_MODIFIED, 282, 88, 102, 70,
+                CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+
+    DEFPUSHBUTTON "OK",     IDOK,     316, 112, 66, 16
+    PUSHBUTTON    "Cancel", IDCANCEL, 386, 112, 66, 16
 END
 
 

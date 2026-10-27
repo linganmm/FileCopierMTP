@@ -48,8 +48,18 @@ private:
     CEdit   m_editExcl;
     CStatic m_staticExclType;
     CComboBox m_comboConflict;
+    CComboBox m_comboModified;
 
     void UpdateUi();
+
+    // The Exclusion box is free text: comma-separated conditions, where a
+    // "quoted" entry is an exact path (below the device root) and anything
+    // else is a regular expression matched against file / folder names.
+    static std::vector<CString> SplitConditions(const CString& text);
+    static bool    IsAbsoluteLocal(const CString& path);
+    static CString ExclusionPathText(const CSourceItem& x);
+    void           ReadExclusionBox();       // box text → excludes + excludePatterns
+    void           WriteExclusionBox();      // excludes + excludePatterns → box text
     static CString DeviceName(const CBrowserState* pState, const CString& deviceId);
     static bool    IsInsideSource(const CEndpoint& src, const CSourceItem& x);
     void           DropOutsideExclusions(bool bTellUser);

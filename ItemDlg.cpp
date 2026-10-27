@@ -27,6 +27,7 @@ void CItemDlg::DoDataExchange(CDataExchange* pDX)
     DDX_Control(pDX, IDC_EDIT_EXCL_PATH,   m_editExcl);
     DDX_Control(pDX, IDC_STATIC_EXCL_TYPE, m_staticExclType);
     DDX_Control(pDX, IDC_COMBO_CONFLICT,   m_comboConflict);
+    DDX_Control(pDX, IDC_COMBO_MODIFIED,   m_comboModified);
 }
 
 BOOL CItemDlg::OnInitDialog()
@@ -44,6 +45,18 @@ BOOL CItemDlg::OnInitDialog()
     }
     if (m_comboConflict.GetCurSel() < 0) m_comboConflict.SetCurSel(2);   // Overwrite if newer
 
+    // "Modified within": blank (= any time, the default), 1 day, 1 week, 1 month
+    const int periods[] = { MODIFIED_ANY, MODIFIED_DAY, MODIFIED_WEEK, MODIFIED_MONTH };
+    for (int p : periods)
+    {
+        int i = m_comboModified.AddString(ModifiedWithinName(p));
+        m_comboModified.SetItemData(i, (DWORD_PTR)p);
+        if (p == m_item.nModifiedWithin) m_comboModified.SetCurSel(i);
+    }
+    if (m_comboModified.GetCurSel() < 0) m_comboModified.SetCurSel(0);
+
+    m_editExcl.SetLimitText(4096);
+    WriteExclusionBox();
     UpdateUi();
     return TRUE;
 }
@@ -164,6 +177,129 @@ void CItemDlg::DropOutsideExclusions(bool bTellUser)
                    _T("Exclusion"), MB_ICONINFORMATION);
 }
 
+// Split on commas that are outside "quotes" and outside (), [] and {} — so a
+// regex like a{1,3} stays whole.  Outside quotes a backslash protects the next
+// character, so "\," is a literal comma inside a pattern.
+std::vector<CString> CItemDlg::SplitConditions(const CString& text)
+{
+    std::vector<CString> out;
+    CString cur;
+    bool inQuote = false;
+    int  depth   = 0;
+    for (int i = 0; i < text.GetLength(); ++i)
+    {
+        TCHAR c = text[i];
+        if (inQuote)
+        {
+            cur += c;
+            if (c == _T('"')) inQuote = false;
+            continue;
+        }
+        if (c == _T('\\') && i + 1 < text.GetLength())
+        {
+            cur += c;
+            cur += text[++i];
+            continue;
+        }
+        if (c == _T('"')) inQuote = true;
+        else if (c == _T('(') || c == _T('[') || c == _T('{')) ++depth;
+        else if ((c == _T(')') || c == _T(']') || c == _T('}')) && depth > 0) --depth;
+        else if (c == _T(',') && depth == 0)
+        {
+            cur.Trim();
+            if (!cur.IsEmpty()) out.push_back(cur);
+            cur.Empty();
+            continue;
+        }
+        cur += c;
+    }
+    cur.Trim();
+    if (!cur.IsEmpty()) out.push_back(cur);
+    return out;
+}
+
+bool CItemDlg::IsAbsoluteLocal(const CString& path)
+{
+    return path.GetLength() >= 2 && path[1] == _T(':');
+}
+
+CString CItemDlg::ExclusionPathText(const CSourceItem& x)
+{
+    return x.strSubPath.IsEmpty() ? x.strLocalPath : x.strSubPath;
+}
+
+void CItemDlg::WriteExclusionBox()
+{
+    CString text;
+    for (auto& x : m_item.src.excludes)
+    {
+        if (!text.IsEmpty()) text += _T(", ");
+        text += _T("\"") + ExclusionPathText(x) + _T("\"");
+    }
+    for (auto& p : m_item.src.excludePatterns)
+    {
+        if (!text.IsEmpty()) text += _T(", ");
+        text += p;
+    }
+    m_editExcl.SetWindowText(text);
+    m_staticExclType.SetWindowText(m_item.src.excludes.empty() ? _T("")
+                                   : (m_item.src.bIsLocal ? _T("[Local]") : _T("[MTP]")));
+}
+
+void CItemDlg::ReadExclusionBox()
+{
+    CString text;
+    m_editExcl.GetWindowText(text);
+
+    std::vector<CSourceItem> paths;
+    std::vector<CString>     patterns;
+    for (auto& tok : SplitConditions(text))
+    {
+        if (tok.GetLength() >= 2 && tok[0] == _T('"') && tok[tok.GetLength() - 1] == _T('"'))
+        {
+            CString path = tok.Mid(1, tok.GetLength() - 2);
+            path.Trim();
+            if (path.IsEmpty()) continue;
+
+            // Keep the full record of an exclusion picked with Browse...
+            bool found = false;
+            for (auto& x : m_item.src.excludes)
+                if (ExclusionPathText(x).CompareNoCase(path) == 0) { paths.push_back(x); found = true; break; }
+            if (found) continue;
+
+            // ...or build one from a typed path
+            CSourceItem x;
+            if (m_item.src.bIsLocal)
+            {
+                path.Replace(_T('/'), _T('\\'));
+                if (IsAbsoluteLocal(path))
+                {
+                    x.strLocalPath = path;
+                    x.strObjectId  = path;
+                    x.strSubPath   = SubPathBelow(m_item.src.strDeviceId, path);
+                }
+                else
+                    x.strSubPath = path;
+            }
+            else
+            {
+                path.Replace(_T('\\'), _T('/'));
+                x.strSubPath = path;
+            }
+            CString n = path;
+            n.Replace(_T('/'), _T('\\'));
+            n.TrimRight(_T('\\'));
+            int pos = n.ReverseFind(_T('\\'));
+            x.strName = pos >= 0 ? n.Mid(pos + 1) : n;
+            paths.push_back(x);
+        }
+        else
+            patterns.push_back(tok);
+    }
+    m_item.src.excludes        = paths;
+    m_item.src.excludePatterns = patterns;
+}
+
 bool CItemDlg::SourceOk(const CEndpoint& ep)
 {
     return !ep.items.empty();
@@ -180,15 +316,13 @@ void CItemDlg::UpdateUi()
 {
     bool src  = SourceOk(m_item.src);
     bool dst  = DestOk(m_item.dst);
-    bool excl = src && !m_item.src.excludes.empty();
     m_editSrc.SetWindowText(src ? m_item.src.strDisplayPath : CString());
     m_editDst.SetWindowText(dst ? m_item.dst.strDisplayPath : CString());
-    m_editExcl.SetWindowText(excl ? PlanFile::ListDisplay(m_item.src, m_item.src.excludes) : CString());
     m_staticSrcType.SetWindowText(!src ? _T("") : (m_item.src.bIsLocal ? _T("[Local]") : _T("[MTP]")));
     m_staticDstType.SetWindowText(!dst ? _T("") : (m_item.dst.bIsLocal ? _T("[Local]") : _T("[MTP]")));
-    m_staticExclType.SetWindowText(!excl ? _T("") : (m_item.src.bIsLocal ? _T("[Local]") : _T("[MTP]")));
     GetDlgItem(IDC_BTN_BROWSE_EXCL)->EnableWindow(src);
-    GetDlgItem(IDC_BTN_CLEAR_EXCL)->EnableWindow(excl);
+    GetDlgItem(IDC_BTN_CLEAR_EXCL)->EnableWindow(src);
+    m_editExcl.EnableWindow(src);
     GetDlgItem(IDOK)->EnableWindow(src && dst);
 }
 
@@ -201,6 +335,8 @@ void CItemDlg::OnBtnBrowseSrc()
     if (!m_bSrcBrowsed && m_pSrcState)
         for (auto& snap : m_pSrcState->treeSnapshot) snap.bSelected = false;
     m_bSrcBrowsed = true;
+
+    ReadExclusionBox();                 // keep what was typed
 
     CMtpBrowserDlg dlg(this);
     dlg.m_bSourceMode = true;
@@ -221,9 +357,11 @@ void CItemDlg::OnBtnBrowseSrc()
                                  m_item.src.bIsLocal, m_item.src.strDeviceId,
                                  m_item.src.strDeviceName);
     if (sameDevice) ep.excludes = m_item.src.excludes;
+    ep.excludePatterns = m_item.src.excludePatterns;   // name patterns apply anywhere
 
     m_item.src = ep;
     DropOutsideExclusions(true);
+    WriteExclusionBox();
     UpdateUi();
 }
 
@@ -235,6 +373,7 @@ void CItemDlg::OnBtnBrowseExcl()
                    _T("Exclusion"), MB_ICONINFORMATION);
         return;
     }
+    ReadExclusionBox();                 // keep typed patterns and paths
 
     // Open the browser where the source is: start from the source tree
     // (already expanded down to the source folders) unless the exclusion
@@ -290,14 +429,17 @@ void CItemDlg::OnBtnBrowseExcl()
     FillSubPaths(list, m_item.src.bIsLocal, pickedId);
     if (m_item.src.strDeviceId.IsEmpty()) m_item.src.strDeviceId = pickedId;   // loaded plan
 
-    m_item.src.excludes = list;            // the selection replaces the old list
-    DropOutsideExclusions(true);
+    m_item.src.excludes = list;            // the selection replaces the old paths;
+    DropOutsideExclusions(true);           // typed patterns are kept
+    WriteExclusionBox();
     UpdateUi();
 }
 
 void CItemDlg::OnBtnClearExcl()
 {
     m_item.src.excludes.clear();
+    m_item.src.excludePatterns.clear();
+    WriteExclusionBox();
     UpdateUi();
 }
 
@@ -348,7 +490,36 @@ void CItemDlg::OnOK()
         MessageBox(_T("Please select a destination folder."), _T("Error"), MB_ICONWARNING);
         return;
     }
+
+    // Exclusions: valid regular expressions, paths inside the source
+    ReadExclusionBox();
+    for (auto& p : m_item.src.excludePatterns)
+    {
+        try
+        {
+            std::wregex re(std::wstring(p.GetString()),
+                           std::regex_constants::ECMAScript | std::regex_constants::icase);
+        }
+        catch (const std::regex_error&)
+        {
+            MessageBox(_T("This exclusion is not a valid regular expression:\n\n  ") + p +
+                       _T("\n\nPut exact paths in double quotes, e.g. \"DCIM\\a3\"."),
+                       _T("Exclusion"), MB_ICONWARNING);
+            m_editExcl.SetFocus();
+            return;
+        }
+    }
+    size_t before = m_item.src.excludes.size();
+    DropOutsideExclusions(true);
+    if (m_item.src.excludes.size() != before)
+    {
+        WriteExclusionBox();               // show what is left, let the user confirm
+        return;
+    }
+
     int sel = m_comboConflict.GetCurSel();
     m_item.nOnConflict = sel >= 0 ? (int)m_comboConflict.GetItemData(sel) : CONFLICT_NEWER;
+    sel = m_comboModified.GetCurSel();
+    m_item.nModifiedWithin = sel >= 0 ? (int)m_comboModified.GetItemData(sel) : MODIFIED_ANY;
     CDialogEx::OnOK();
 }

@@ -179,7 +179,7 @@ std::vector<CCopyTask> ToTasks(const CBackupPlan& plan)
 {
     std::vector<CCopyTask> tasks;
     for (auto& it : plan.items)
-        tasks.push_back(CCopyTask{ it.src, it.dst, it.nOnConflict });
+        tasks.push_back(CCopyTask{ it.src, it.dst, it.nOnConflict, it.nModifiedWithin });
     return tasks;
 }
 
@@ -250,6 +250,9 @@ static Value EndpointToJson(const CEndpoint& ep, bool bSource)
     {
         o.Set(L"entries",    EntriesToJson(ep.items));
         o.Set(L"exclusions", EntriesToJson(ep.excludes));
+        Value pats = Value::MakeArray();
+        for (auto& p : ep.excludePatterns) pats.Append(Value(W(p)));
+        o.Set(L"excludePatterns", pats);
     }
     else
     {
@@ -276,6 +279,10 @@ static bool EndpointFromJson(const Value* v, bool bSource, CEndpoint& ep, CStrin
     {
         EntriesFromJson(v->Find(L"entries"),    ep, ep.items);
         EntriesFromJson(v->Find(L"exclusions"), ep, ep.excludes);
+        if (const Value* pats = v->Find(L"excludePatterns"))
+            for (auto& p : pats->Items())
+                if (p.IsString() && !p.AsString().empty())
+                    ep.excludePatterns.push_back(C(p.AsString()));
         ep.strDisplayPath = ListDisplay(ep, ep.items);
     }
     else
@@ -332,6 +339,10 @@ bool Save(const CBackupPlan& plan, const CString& path, CString& err)
         o.Set(L"onConflict",  Value(it.nOnConflict == CONFLICT_OVERWRITE ? L"overwrite"
                                   : it.nOnConflict == CONFLICT_SKIP      ? L"skip"
                                                                          : L"overwriteIfNewer"));
+        if (it.nModifiedWithin != MODIFIED_ANY)
+            o.Set(L"modifiedWithin", Value(it.nModifiedWithin == MODIFIED_DAY  ? L"day"
+                                         : it.nModifiedWithin == MODIFIED_WEEK ? L"week"
+                                                                               : L"month"));
         o.Set(L"destination", EndpointToJson(it.dst, false));
         items.Append(o);
     }
@@ -453,6 +464,11 @@ bool Load(const CString& path, CBackupPlan& plan, CString& err)
                        (LPCTSTR)path, idx, (LPCTSTR)e);
             return false;
         }
+        std::wstring mw = v.GetString(L"modifiedWithin");
+        item.nModifiedWithin = mw == L"day"   ? MODIFIED_DAY
+                             : mw == L"week"  ? MODIFIED_WEEK
+                             : mw == L"month" ? MODIFIED_MONTH
+                                              : MODIFIED_ANY;
         std::wstring oc = v.GetString(L"onConflict", L"overwriteIfNewer");
         item.nOnConflict = oc == L"overwrite" ? CONFLICT_OVERWRITE
                          : oc == L"skip"      ? CONFLICT_SKIP

@@ -26,6 +26,17 @@ CString SubPathBelow(const CString& root, const CString& fullPath)
     return s;
 }
 
+CString ModifiedWithinName(int nCode)
+{
+    switch (nCode)
+    {
+    case MODIFIED_DAY:   return _T("1 day");
+    case MODIFIED_WEEK:  return _T("1 week");
+    case MODIFIED_MONTH: return _T("1 month");
+    default:             return _T("");
+    }
+}
+
 CString ConflictPolicyName(int nPolicy)
 {
     switch (nPolicy)
@@ -222,24 +233,42 @@ static std::wstring LocalKey(const CString& path)
     return std::wstring(p.GetString());
 }
 
+bool CExpandFilter::NameExcluded(const CString& name) const
+{
+    if (patterns.empty()) return false;
+    std::wstring n(name.GetString());
+    for (auto& re : patterns)
+        if (std::regex_match(n, re)) return true;
+    return false;
+}
+
+bool CExpandFilter::TooOld(const FILETIME& ft) const
+{
+    if (!bCutoff) return false;
+    if (ft.dwLowDateTime == 0 && ft.dwHighDateTime == 0) return false;   // unknown → copy
+    return CompareFileTime(&ft, &ftCutoff) < 0;
+}
+
+static FILETIME LocalModifiedTime(const CString& path)
+{
+    WIN32_FILE_ATTRIBUTE_DATA fad = {};
+    if (GetFileAttributesExW(path.GetString(), GetFileExInfoStandard, &fad))
+        return fad.ftLastWriteTime;
+    return FILETIME{};
+}
+
 std::vector<FlatFile> CCopyJob::ExpandItem(const CSourceItem& item, CWpdHelper* pWpd,
-                                           const std::vector<CSourceItem>* pExcludes)
+                                           CExpandFilter* f)
 {
     std::vector<FlatFile> result;
 
-    // Build the exclusion set: MTP object IDs, or normalised local paths
-    std::set<std::wstring> excl;
-    if (pExcludes)
-        for (auto& x : *pExcludes)
-            excl.insert(pWpd ? std::wstring(x.strObjectId.GetString())
-                             : LocalKey(x.strLocalPath.IsEmpty() ? x.strObjectId : x.strLocalPath));
-
     // The selected item itself may be excluded
-    if (!excl.empty())
+    if (f)
     {
         std::wstring self = pWpd ? std::wstring(item.strObjectId.GetString())
                                  : LocalKey(item.strLocalPath.IsEmpty() ? item.strObjectId : item.strLocalPath);
-        if (excl.count(self)) return result;
+        if (f->excl.count(self)) return result;
+        if (f->NameExcluded(item.strName)) { ++f->nPatternSkipped; return result; }
     }
 
     if (!item.bIsFolder)
@@ -247,6 +276,11 @@ std::vector<FlatFile> CCopyJob::ExpandItem(const CSourceItem& item, CWpdHelper* 
         FlatFile ff;
         ff.strSrcId   = item.strObjectId.IsEmpty() ? item.strLocalPath : item.strObjectId;
         ff.strRelPath = item.strName;
+        if (f && f->bCutoff)
+        {
+            FILETIME ft = pWpd ? pWpd->GetModifiedTime(ff.strSrcId) : LocalModifiedTime(ff.strSrcId);
+            if (f->TooOld(ft)) { ++f->nOlderSkipped; return result; }
+        }
         result.push_back(ff);
         return result;
     }
@@ -255,13 +289,20 @@ std::vector<FlatFile> CCopyJob::ExpandItem(const CSourceItem& item, CWpdHelper* 
     {
         // MTP folder
         std::function<bool(const MtpNode&)> skip;
-        if (!excl.empty())
-            skip = [&excl](const MtpNode& n) {
-                return excl.count(std::wstring(n.strObjectId.GetString())) > 0;
+        if (f && (!f->excl.empty() || !f->patterns.empty()))
+            skip = [f](const MtpNode& n) {
+                if (f->excl.count(std::wstring(n.strObjectId.GetString()))) return true;
+                if (f->NameExcluded(n.strName)) { ++f->nPatternSkipped; return true; }
+                return false;
             };
         pWpd->EnumerateFiles(item.strObjectId, item.strName,
             [&](const MtpNode& node, const CString& rel)
             {
+                if (f && f->bCutoff && f->TooOld(pWpd->GetModifiedTime(node.strObjectId)))
+                {
+                    ++f->nOlderSkipped;
+                    return;
+                }
                 FlatFile ff;
                 ff.strSrcId   = node.strObjectId;
                 ff.strRelPath = rel;
@@ -279,15 +320,27 @@ std::vector<FlatFile> CCopyJob::ExpandItem(const CSourceItem& item, CWpdHelper* 
              !ec && it != fs::recursive_directory_iterator(); it.increment(ec))
         {
             std::error_code ec2;
-            if (!excl.empty() && excl.count(LocalKey(CString(it->path().c_str()))))
+            if (f)
             {
-                if (it->is_directory(ec2)) it.disable_recursion_pending();
-                continue;
+                bool byPath = !f->excl.empty() && f->excl.count(LocalKey(CString(it->path().c_str())));
+                bool byName = !byPath && f->NameExcluded(CString(it->path().filename().c_str()));
+                if (byPath || byName)
+                {
+                    if (byName) ++f->nPatternSkipped;
+                    if (it->is_directory(ec2)) it.disable_recursion_pending();
+                    continue;
+                }
             }
             if (!it->is_regular_file(ec2)) continue;
+            CString full(it->path().c_str());
+            if (f && f->bCutoff && f->TooOld(LocalModifiedTime(full)))
+            {
+                ++f->nOlderSkipped;
+                continue;
+            }
             fs::path rel = baseName / fs::relative(it->path(), root, ec2);
             FlatFile ff;
-            ff.strSrcId   = CString(it->path().c_str());
+            ff.strSrcId   = full;
             ff.strRelPath = CString(rel.c_str());
             result.push_back(ff);
         }
@@ -305,13 +358,71 @@ static bool ShouldOverwrite(FILETIME ftSrc, FILETIME ftDst)
     return CompareFileTime(&ftSrc, &ftDst) > 0;   // src > dst → src is newer
 }
 
-static std::vector<FlatFile> BuildFileList(const CEndpoint& src, CWpdHelper* pWpd)
+// Cutoff for "modified within": now minus a day / week / calendar month (UTC)
+static bool ComputeCutoff(int code, FILETIME& ft)
 {
-    std::vector<FlatFile> all;
-    for (auto& item : src.items)
+    if (code != MODIFIED_DAY && code != MODIFIED_WEEK && code != MODIFIED_MONTH) return false;
+    SYSTEMTIME st;
+    GetSystemTime(&st);
+    if (code == MODIFIED_MONTH)
     {
-        auto expanded = CCopyJob::ExpandItem(item, pWpd, &src.excludes);
+        if (st.wMonth == 1) { st.wMonth = 12; --st.wYear; } else --st.wMonth;
+        static const WORD days[] = { 31,28,31,30,31,30,31,31,30,31,30,31 };
+        WORD maxDay = days[st.wMonth - 1];
+        bool leap = (st.wYear % 4 == 0 && st.wYear % 100 != 0) || st.wYear % 400 == 0;
+        if (st.wMonth == 2 && leap) maxDay = 29;
+        if (st.wDay > maxDay) st.wDay = maxDay;
+        return SystemTimeToFileTime(&st, &ft) != FALSE;
+    }
+    if (!SystemTimeToFileTime(&st, &ft)) return false;
+    ULARGE_INTEGER u;
+    u.LowPart = ft.dwLowDateTime; u.HighPart = ft.dwHighDateTime;
+    u.QuadPart -= (ULONGLONG)(code == MODIFIED_DAY ? 1 : 7) * 24ULL * 3600ULL * 10000000ULL;
+    ft.dwLowDateTime = u.LowPart; ft.dwHighDateTime = u.HighPart;
+    return true;
+}
+
+std::vector<FlatFile> CCopyJob::BuildFileList(const CCopyTask& t, CWpdHelper* pWpd)
+{
+    CExpandFilter f;
+    for (auto& x : t.src.excludes)
+        f.excl.insert(pWpd ? std::wstring(x.strObjectId.GetString())
+                           : LocalKey(x.strLocalPath.IsEmpty() ? x.strObjectId : x.strLocalPath));
+    for (auto& p : t.src.excludePatterns)
+    {
+        try
+        {
+            f.patterns.emplace_back(std::wstring(p.GetString()),
+                                    std::regex_constants::ECMAScript | std::regex_constants::icase);
+        }
+        catch (const std::regex_error&)
+        {
+            PostError(_T("Invalid exclusion pattern ignored: ") + p);
+        }
+    }
+    f.bCutoff = ComputeCutoff(t.nModifiedWithin, f.ftCutoff);
+
+    std::vector<FlatFile> all;
+    for (auto& item : t.src.items)
+    {
+        if (IsCancelled()) break;
+        auto expanded = ExpandItem(item, pWpd, &f);
         all.insert(all.end(), expanded.begin(), expanded.end());
+    }
+
+    if (f.nPatternSkipped > 0)
+    {
+        CString s;
+        s.Format(_T("  %d file(s)/folder(s) matched an exclusion pattern and were skipped"),
+                 f.nPatternSkipped);
+        PostLog(s);
+    }
+    if (f.nOlderSkipped > 0)
+    {
+        CString s;
+        s.Format(_T("  %d file(s) not modified within the last %s were skipped"),
+                 f.nOlderSkipped, (LPCTSTR)ModifiedWithinName(t.nModifiedWithin));
+        PostLog(s);
     }
     return all;
 }
@@ -370,6 +481,14 @@ void CCopyJob::Run()
         }
         if (t.nOnConflict != 0)
             PostLog(_T("  If file exists: ") + ConflictPolicyName(t.nOnConflict));
+        if (t.nModifiedWithin != MODIFIED_ANY)
+            PostLog(_T("  Only files modified within the last ") + ModifiedWithinName(t.nModifiedWithin));
+        if (!t.src.excludePatterns.empty())
+        {
+            CString pats;
+            for (auto& p : t.src.excludePatterns) { if (!pats.IsEmpty()) pats += _T(", "); pats += p; }
+            PostLog(_T("  Exclusion patterns: ") + pats);
+        }
 
         InitStat(0);
         ReportProgress(_T(""));
@@ -629,7 +748,7 @@ bool CCopyJob::PrepareTask(CCopyTask& t)
 // ─────────────────────────────────────────────────────────────────────────────
 void CCopyJob::DoLocalToLocal(const CCopyTask& t)
 {
-    auto files = BuildFileList(t.src, nullptr);
+    auto files = BuildFileList(t, nullptr);
     InitStat((int)files.size());
     fs::path dstRoot = t.dst.strLocalPath.GetString();
 
@@ -677,7 +796,7 @@ void CCopyJob::DoLocalToMtp(const CCopyTask& t)
         throw std::runtime_error("Failed to open destination MTP device.");
     wpd.RefreshContent();
 
-    auto files = BuildFileList(t.src, nullptr);
+    auto files = BuildFileList(t, nullptr);
     InitStat((int)files.size());
 
     for (auto& ff : files)
@@ -728,7 +847,7 @@ void CCopyJob::DoMtpToLocal(const CCopyTask& t)
         throw std::runtime_error("Failed to open source MTP device.");
     wpd.RefreshContent();
 
-    auto files = BuildFileList(t.src, &wpd);
+    auto files = BuildFileList(t, &wpd);
     InitStat((int)files.size());
     fs::path dstRoot = t.dst.strLocalPath.GetString();
 
@@ -775,7 +894,7 @@ void CCopyJob::DoMtpToMtp(const CCopyTask& t)
         throw std::runtime_error("Failed to open destination MTP device.");
     wpdDst.RefreshContent();
 
-    auto files = BuildFileList(t.src, &wpdSrc);
+    auto files = BuildFileList(t, &wpdSrc);
     InitStat((int)files.size());
 
     // Temp directory on the host for buffering (one per job so parallel

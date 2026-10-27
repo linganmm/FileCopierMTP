@@ -5,6 +5,7 @@
 #include "BrowserState.h"
 
 #include <atomic>
+#include <regex>
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Copy engine shared by the "Universal File Copier" dialog and by backup-plan
@@ -37,6 +38,9 @@ struct CEndpoint
     // Files/folders inside the source folders that must NOT be copied
     // (same device as the source; a folder excludes its whole subtree).
     std::vector<CSourceItem> excludes;
+    // Regular expressions matched (whole name, case-insensitive) against
+    // every file and folder name below the source; matches are not copied.
+    std::vector<CString> excludePatterns;
 
     // ── Destination folder (used for the destination endpoint) ───────────────
     CString strLocalPath;    // local: absolute path of destination folder
@@ -73,6 +77,26 @@ struct CCopyTask
     // 0 = ask with the conflict dialog (Universal File Copier), or
     // CONFLICT_OVERWRITE / CONFLICT_SKIP / CONFLICT_NEWER (backup plans).
     int nOnConflict = 0;
+    // Only copy files modified within this period (MODIFIED_ANY = no limit)
+    int nModifiedWithin = 0;
+};
+
+// "Modified within" choices for CCopyTask::nModifiedWithin
+enum { MODIFIED_ANY = 0, MODIFIED_DAY = 1, MODIFIED_WEEK = 2, MODIFIED_MONTH = 3 };
+CString ModifiedWithinName(int nCode);          // "", "1 day", "1 week", "1 month"
+
+// Filter applied while a source item is expanded into files
+struct CExpandFilter
+{
+    std::set<std::wstring>   excl;        // excluded MTP object IDs / normalised local paths
+    std::vector<std::wregex> patterns;    // excluded names
+    bool     bCutoff  = false;            // skip files modified before ftCutoff
+    FILETIME ftCutoff = {};               // UTC
+    int      nPatternSkipped = 0;         // files/folders left out by patterns
+    int      nOlderSkipped   = 0;         // files left out by the date limit
+
+    bool NameExcluded(const CString& name) const;
+    bool TooOld(const FILETIME& ftModified) const;   // unknown (zero) time → not too old
 };
 
 // ── Progress payload ──────────────────────────────────────────────────────────
@@ -141,11 +165,12 @@ public:
     // Expand a CSourceItem into a flat list of (objectId-or-localPath, relPath) pairs.
     // For a file item the list has exactly one entry with relPath == filename.
     // For a folder item the list contains every file in the subtree.
-    // Anything listed in pExcludes (matched by local path / MTP object ID) is
-    // left out; an excluded folder is not even walked.
+    // pFilter (optional): excluded paths/IDs and name patterns are left out —
+    // an excluded folder is not even walked — and files older than the
+    // cutoff are skipped.  The filter's counters are updated.
     static std::vector<FlatFile> ExpandItem(const CSourceItem& item,
                                             CWpdHelper* pWpd /*nullptr for local*/,
-                                            const std::vector<CSourceItem>* pExcludes = nullptr);
+                                            CExpandFilter* pFilter = nullptr);
 
 private:
     struct Stat {
@@ -164,6 +189,8 @@ private:
     bool PrepareTask(CCopyTask& t);
     bool ResolveDevice(CEndpoint& ep);
     bool ResolveLocal(CEndpoint& ep);
+
+    std::vector<FlatFile> BuildFileList(const CCopyTask& t, CWpdHelper* pWpd);
 
     void DoLocalToLocal(const CCopyTask& t);
     void DoLocalToMtp  (const CCopyTask& t);
