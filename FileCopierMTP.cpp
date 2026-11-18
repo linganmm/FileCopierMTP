@@ -70,11 +70,14 @@ BOOL CFileCopierMTPApp::InitInstance()
     m_pMainWnd->ShowWindow(SW_SHOW);
     m_pMainWnd->UpdateWindow();
 
-    if (!planToLoad.IsEmpty())
+    auto* pFrame = DYNAMIC_DOWNCAST(CFrameWnd, m_pMainWnd);
+    auto* pView  = pFrame ? DYNAMIC_DOWNCAST(CLXFreeBackView, pFrame->GetActiveView()) : nullptr;
+    if (pView)
     {
-        auto* pFrame = DYNAMIC_DOWNCAST(CFrameWnd, m_pMainWnd);
-        auto* pView  = pFrame ? DYNAMIC_DOWNCAST(CLXFreeBackView, pFrame->GetActiveView()) : nullptr;
-        if (pView) pView->LoadPlanFile(planToLoad, true);
+        // Plans that were loaded when the program last exited
+        pView->RestoreSession();
+        // A .lbp file passed on the command line is added (or selected)
+        if (!planToLoad.IsEmpty()) pView->LoadPlanFile(planToLoad, true);
     }
     return TRUE;
 }

@@ -29,11 +29,15 @@ public:
     // Called by the frame before closing; stops running plans after asking.
     bool PrepareToClose();
 
+    // Reloads the plans that were loaded when the program last exited.
+    void RestoreSession();
+
 protected:
     afx_msg int  OnCreate(LPCREATESTRUCT lpCreateStruct);
     afx_msg void OnSize(UINT nType, int cx, int cy);
     afx_msg void OnSetFocus(CWnd* pOldWnd);
     afx_msg BOOL OnEraseBkgnd(CDC* pDC);
+    afx_msg void OnDestroy();
 
     afx_msg void OnFileNewPlan();
     afx_msg void OnFileLoadPlan();
@@ -66,6 +70,9 @@ private:
 
     CActionList m_list;
     bool        m_bClosing = false;
+    bool        m_bRestoring = false;   // don't rewrite the session while reading it
+
+    void SaveSession();                 // remember the loaded plans (and selection)
 
     std::vector<std::shared_ptr<CPlanEntry>>& Plans() const;
     int  SelectedPlan() const;       // -1 if none

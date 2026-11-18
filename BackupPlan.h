@@ -96,4 +96,11 @@ namespace PlanFile
 
     // System message for a Win32 error code.
     CString ErrorText(DWORD code);
+
+    // ── Session: the plans loaded in the LXFreeBack window ───────────────────
+    // Stored per Windows user in %APPDATA%\LXFreeBack\session.json:
+    //   { "loadedPlans": [ "C:\\...\\A.lbp", ... ], "selected": 0 }
+    CString SessionFilePath();
+    bool SaveSession(const std::vector<CString>& planPaths, int nSelected);
+    bool LoadSession(std::vector<CString>& planPaths, int& nSelected);
 }

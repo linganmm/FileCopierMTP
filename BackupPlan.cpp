@@ -480,4 +480,74 @@ bool Load(const CString& path, CBackupPlan& plan, CString& err)
     return true;
 }
 
+// ── Session ──────────────────────────────────────────────────────────────────
+
+CString SessionFilePath()
+{
+    CString dir;
+    PWSTR p = nullptr;
+    if (SUCCEEDED(::SHGetKnownFolderPath(FOLDERID_RoamingAppData, 0, nullptr, &p)) && p)
+        dir = p;
+    if (p) ::CoTaskMemFree(p);
+    if (dir.IsEmpty()) dir = GetExeDir();          // fallback
+    return dir + _T("\\LXFreeBack\\session.json");
+}
+
+bool SaveSession(const std::vector<CString>& planPaths, int nSelected)
+{
+    CString path = SessionFilePath();
+    ::CreateDirectory(DirOf(path), nullptr);       // fine if it already exists
+
+    Value root = Value::MakeObject();
+    Value list = Value::MakeArray();
+    for (auto& p : planPaths) list.Append(Value(W(p)));
+    root.Set(L"loadedPlans", list);
+    root.Set(L"selected", Value(nSelected));
+    std::string text = jsonlite::Write(root, 2);
+
+    CString tmp = path + _T(".tmp");
+    HANDLE h = ::CreateFile(tmp, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS,
+                            FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (h == INVALID_HANDLE_VALUE) return false;
+    DWORD written = 0;
+    BOOL ok = ::WriteFile(h, text.data(), (DWORD)text.size(), &written, nullptr)
+              && written == (DWORD)text.size();
+    ::CloseHandle(h);
+    if (!ok || !::MoveFileEx(tmp, path, MOVEFILE_REPLACE_EXISTING))
+    {
+        ::DeleteFile(tmp);
+        return false;
+    }
+    return true;
+}
+
+bool LoadSession(std::vector<CString>& planPaths, int& nSelected)
+{
+    planPaths.clear();
+    nSelected = -1;
+
+    HANDLE h = ::CreateFile(SessionFilePath(), GENERIC_READ, FILE_SHARE_READ, nullptr,
+                            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (h == INVALID_HANDLE_VALUE) return false;   // first start: no session yet
+    LARGE_INTEGER size = {};
+    ::GetFileSizeEx(h, &size);
+    if (size.QuadPart <= 0 || size.QuadPart > 4LL * 1024 * 1024) { ::CloseHandle(h); return false; }
+    std::string text((size_t)size.QuadPart, '\0');
+    DWORD read = 0;
+    BOOL ok = ::ReadFile(h, &text[0], (DWORD)text.size(), &read, nullptr);
+    ::CloseHandle(h);
+    if (!ok) return false;
+    text.resize(read);
+
+    Value root;
+    if (!jsonlite::Parse(text, root, nullptr) || !root.IsObject()) return false;
+    if (const Value* list = root.Find(L"loadedPlans"))
+        for (auto& v : list->Items())
+            if (v.IsString() && !v.AsString().empty())
+                planPaths.push_back(C(v.AsString()));
+    if (const Value* sel = root.Find(L"selected"))
+        nSelected = (int)sel->AsNumber(-1);
+    return true;
+}
+
 } // namespace PlanFile

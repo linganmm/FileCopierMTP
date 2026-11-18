@@ -12,6 +12,7 @@ BEGIN_MESSAGE_MAP(CLXFreeBackView, CView)
     ON_WM_SIZE()
     ON_WM_SETFOCUS()
     ON_WM_ERASEBKGND()
+    ON_WM_DESTROY()
 
     ON_COMMAND(ID_FILE_NEW_PLAN,   &CLXFreeBackView::OnFileNewPlan)
     ON_COMMAND(ID_FILE_LOAD_PLAN,  &CLXFreeBackView::OnFileLoadPlan)
@@ -164,6 +165,7 @@ void CLXFreeBackView::AddEntry(const CBackupPlan& plan)
     int i = m_list.AddRow(plan.strTitle, _T(""));
     RefreshRow(i);
     m_list.SetSel(i);
+    SaveSession();
 }
 
 // A plan saved over the file of another loaded plan replaces that entry.
@@ -179,6 +181,7 @@ void CLXFreeBackView::RemoveDuplicatesOf(const std::shared_ptr<CPlanEntry>& keep
             m_list.DeleteRow(j);
         }
     }
+    SaveSession();
 }
 
 // ── File menu ─────────────────────────────────────────────────────────────────
@@ -274,6 +277,7 @@ void CLXFreeBackView::UnloadPlan(int index)
     CString title = Plans()[index]->plan.strTitle;
     Plans().erase(Plans().begin() + index);
     m_list.DeleteRow(index);
+    SaveSession();
     SetStatusText(_T("Unloaded ") + title);
 }
 
@@ -305,6 +309,7 @@ void CLXFreeBackView::RemovePlan(int index)
     CString title = plan.strTitle;
     Plans().erase(Plans().begin() + index);
     m_list.DeleteRow(index);
+    SaveSession();
     SetStatusText(_T("Removed ") + title);
 }
 
@@ -503,6 +508,69 @@ LRESULT CLXFreeBackView::OnCopyLog(WPARAM wParam, LPARAM lParam)
     int i = GetDocument()->FindByJob((UINT)wParam);
     if (pMsg && i >= 0) Plans()[i]->log.push_back(*pMsg);
     return 0;
+}
+
+// ── Session ───────────────────────────────────────────────────────────────────
+
+void CLXFreeBackView::SaveSession()
+{
+    if (m_bRestoring) return;
+    std::vector<CString> paths;
+    for (auto& p : Plans())
+        if (!p->plan.strFilePath.IsEmpty()) paths.push_back(p->plan.strFilePath);
+    PlanFile::SaveSession(paths, SelectedPlan());
+}
+
+void CLXFreeBackView::RestoreSession()
+{
+    std::vector<CString> paths;
+    int sel = -1;
+    if (!PlanFile::LoadSession(paths, sel) || paths.empty()) return;
+
+    std::vector<CString> failed;
+    m_bRestoring = true;
+    for (auto& path : paths)
+    {
+        CBackupPlan plan;
+        CString err;
+        if (GetDocument()->FindByPath(path) >= 0) continue;
+        if (PlanFile::Load(path, plan, err))
+            AddEntry(plan);
+        else
+            failed.push_back(path);
+    }
+    m_bRestoring = false;
+
+    // Restore the selection (by position; it may shift if a plan is missing)
+    if (sel >= 0 && sel < (int)Plans().size()) m_list.SetSel(sel);
+    else if (!Plans().empty())                 m_list.SetSel(0);
+
+    SaveSession();                            // drop the ones that no longer load
+
+    CString msg;
+    msg.Format(_T("Reloaded %d backup plan(s) from the last session."), (int)Plans().size());
+    SetStatusText(msg);
+
+    if (!failed.empty())
+    {
+        CString list;
+        for (size_t i = 0; i < failed.size() && i < 10; ++i) list += _T("\n  ") + failed[i];
+        if (failed.size() > 10)
+        {
+            CString more;
+            more.Format(_T("\n  \u2026 and %d more"), (int)failed.size() - 10);
+            list += more;
+        }
+        MessageBox(_T("These backup plans from the last session could not be loaded ")
+                   _T("(moved, deleted or damaged) and were removed from the list:") + list,
+                   _T("LXFreeBack"), MB_ICONINFORMATION);
+    }
+}
+
+void CLXFreeBackView::OnDestroy()
+{
+    SaveSession();                            // also records the final selection
+    CView::OnDestroy();
 }
 
 // ── Closing ───────────────────────────────────────────────────────────────────
